@@ -14,7 +14,7 @@ DEFAULT_HITS = 4
 DEFAULT_OPTS = {
     "shift-style": "relative", # "relative", "absolute"
     "stretch-with": "repeat", # int fills with value, "repeat" each hit, "interpolate"
-    "expand-with": 0, # int fills with value, "repeat" sequence
+    "expand-with": 0, # int fills with value, "repeat" last value, "loop" sequence
     "replace-style": "expand", # "trim" trims input to length, "expand" expands to fit all
 }
 
@@ -58,7 +58,23 @@ class Sequence():
     """
     Class representing a single musical sequence. For purposes of this class,
     all indices are represented as beats, and therefore counting starts at 1.
+
+    Can pass a list to the constructor to initialize the sequence to the list.
+
+    Can also pass a dict of options to set up how various methods work.
+
+    Public Attributes
+    -----------------
+    steps: int
+        number of steps in sequence
+    hits: int
+        number of non-0 values in sequence
+    offset: int
+        shift offset of sequence
+    seq: list
+        the sequence as a list
     """
+
     def __init__(self, sequence: Optional[list] = None, options: Optional[dict] = None):
         self.steps = 0
         self.hits = 0
