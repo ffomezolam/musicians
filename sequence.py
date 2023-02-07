@@ -7,16 +7,21 @@ from __future__ import annotations
 from typing import Optional
 
 import itertools as its
+import math
+
+# Global defaults
 
 DEFAULT_STEPS = 16
 DEFAULT_SHIFT = 0
 DEFAULT_HITS = 4
 DEFAULT_OPTS = {
     "shift-style": "relative", # "relative", "absolute"
-    "stretch-with": "repeat", # int fills with value, "repeat" each hit, "interpolate"
+    "stretch-with": 0, # int fills with value, "repeat" each hit, "interpolate"
     "expand-with": 0, # int fills with value, "repeat" last value, "loop" sequence
     "replace-style": "expand", # "trim" trims input to length, "expand" expands to fit all
 }
+
+# Helper functions
 
 def mod(a, b):
     """
@@ -34,17 +39,40 @@ def list_shift(l: list, amt: int = 0):
 
     return l[amt:] + l[:amt]
 
+def split(l, rounding = "up"):
+    """Generate a list from first and len / 2 values, recursively"""
+
+    result = []
+    round_up = False if "down" in rounding else True
+
+def distribute(vals, l, rounding = "up"):
+    """Distribute values list (vals) across list (l) as evenly as possible"""
+
+    pass
+
+def interpolate(val1, val2, num: Optional[int] = 1, func = "linear"):
+    """Interpolate num values between val1 and val2"""
+
+    if val1 == val2: return [val1 for _ in range(num)]
+
+    mult = (val2 - val1) / (num + 1)
+
+    return [val1 + (mult * i) for i in range(1, num + 1)]
+
+# Generator functions
+
 def generate_euclidean(steps: int = DEFAULT_STEPS, hits: int = DEFAULT_HITS, shift: int = DEFAULT_SHIFT) -> list:
     """Generate a euclidean rhythm as a python list"""
+
+    # create list with hits first and rests after
     coll = [[1] if step < hits else [0] for step in range(steps)]
-    t = hits
-    while t > 1:
+    while hits > 1:
         quotient, remainder = divmod(steps, hits)
         for i in range(quotient - 1):
-            for j in range(t):
+            for j in range(hits):
                 item = coll.pop()
                 coll[j] += item
-        t = hits = remainder
+        hits = remainder
         steps = len(coll)
 
     coll = list(its.chain.from_iterable(coll))
@@ -81,6 +109,7 @@ class Sequence():
         self.offset = 0
 
         self.seq = None
+        self._cache = None
 
         self._opts = DEFAULT_OPTS.copy()
 
@@ -226,8 +255,61 @@ class Sequence():
         return self
 
     def stretch_to(self, size: Optional[int], style: Optional[str] = None):
-        """Stretch sequence to size, creating/removing intermediate values"""
-        pass
+        """
+        Stretch sequence to size, creating/removing intermediate values.
+        Stretching to larger irregular sizes will try to spread values as
+        evenly as possible, e.g. [1,2,3,4] stretched to size 6 should look
+        like [1,0,2,3,0,4] and to size 7: [1,0,2,0,3,0,4]
+        """
+
+        if not style: style = self.getopts('stretch-with')
+
+        if size > self.steps:
+            # get divisible and remainder
+            num, extra = divmod(size, self.steps)
+            num -= 1 # adjust for existing step entries
+            result = []
+
+            # only automate adding markers if size is more than twice step count
+            if size >= self.steps * 2:
+                for i in range(self.steps): result.append([self.seq[i]] + [-1 for _ in range(num)])
+
+            # we have a remainder, need to distribute by euclidean model
+            model = generate_euclidean(len(result) + extra, len(result))
+
+            # all zeros in model are the distributed items
+            distributed = its.chain.from_iterable([result.pop(0) if hit else [-1] for i in model])
+
+            # TODO: need to replace -1 entries
+            match style:
+                case int():
+                    # integer replacement
+                    distributed = [style if i < 0 else i for i in distributed]
+                case "repeat":
+                    # repeat last value
+                    for ix in range(len(distributed)):
+                        if distributed[ix] < 0:
+                            distributed[ix] = distributed[ix - 1]
+                case "interpolate":
+                    pass
+
+
+            # cache and replace sequence
+            if not self._cache: self._cache = self.seq
+            self.set(distributed)
+
+        elif size < self.steps:
+            # get model to distribute items
+            model = generate_euclidean(self.steps, size)
+
+            # ones in model are remaining items
+            distributed = its.chain.from_iterable([self.seq[i] for i in self.steps if model[i]])
+
+            # cache and replace sequence
+            if not self._cache: self._cache = self.seq
+            self.set(distributed)
+
+        return self
 
     def stretch_by(self, mult: Optional[float] = 2, style: Optional[str] = None):
         """Stretch sequence by multiplier, creating/removing intermediate values"""
@@ -240,6 +322,14 @@ class Sequence():
     def expand_by(self, size: Optional[int] = 2, style: Optional[str] = None):
         """Expand sequence by multiplier, adding/removing values at end"""
         pass
+
+    def reset(self):
+        """Reset to original sequence (i.e. undo all)"""
+        if self._cache:
+            self.set(self._cache)
+            self._cache = None
+
+        return self
 
     # Sequence querying
 

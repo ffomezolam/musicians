@@ -259,5 +259,48 @@ class TestSequence(unittest.TestCase):
             self.seq.shift(-1)
             self.assertEqual(self.seq.as_list(), [1,2,3,0])
 
+    def test_stretch_to(self):
+        self.seq.set([1,2,3,4])
+
+        with self.subTest("It should add zeros to fill"):
+            self.assertListEqual(self.seq.stretch_to(8).as_list(), [1,0,2,0,3,0,4,0])
+
+        with self.subTest("It should spread original values evenly"):
+            pass
+
+        with self.subTest("It should shrink sequence if necessary"):
+            pass
+
+    def test_stretch_to_with_int(self):
+        self.seq.set([1,2,3,4])
+        self.seq.setopts('stretch-with', 9)
+
+        with self.subTest("It should add number to fill"):
+            self.assertListEqual(self.seq.stretch_to(8).as_list(), [1,9,2,9,3,9,4,9])
+
+    def test_stretch_to_with_repeat(self):
+        pass
+
+    def test_stretch_to_with_interpolate(self):
+        pass
+
+    def test_stretch_by(self):
+        pass
+
+    def test_expand_to(self):
+        pass
+
+    def test_expand_to_with_int(self):
+        pass
+
+    def test_expand_to_with_repeat(self):
+        pass
+
+    def test_expand_to_with_loop(self):
+        pass
+
+    def test_reset(self):
+        pass
+
 if __name__ == '__main__':
     unittest.main()
