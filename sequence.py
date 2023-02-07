@@ -8,6 +8,7 @@ from typing import Optional
 
 import itertools as its
 import math
+from collections import deque
 
 # Global defaults
 
@@ -19,6 +20,9 @@ DEFAULT_OPTS = {
     "stretch-with": 0, # int fills with value, "repeat" each hit, "interpolate"
     "expand-with": 0, # int fills with value, "repeat" last value, "loop" sequence
     "replace-style": "expand", # "trim" trims input to length, "expand" expands to fit all
+    "interpolate-style": "loop", # "repeat" last value, "loop" to first value
+    "interpolate-rounding": "none", # "none", "auto", "up", "down"
+    "global-rounding": "auto", # "auto", "up", "down"
 }
 
 # Helper functions
@@ -31,6 +35,17 @@ def mod(a, b):
     r = a % b
     return r - b if a < 0 else r
 
+def rounder(n, style: str = "auto"):
+    match style:
+        case "auto":
+            return int(n + 0.5)
+        case "up":
+            return math.ceil(n)
+        case "down":
+            return math.floor(n)
+        case _:
+            return n
+
 def list_shift(l: list, amt: int = 0):
     """Helper function for shifting a standard python list"""
     if not amt: return l
@@ -39,25 +54,14 @@ def list_shift(l: list, amt: int = 0):
 
     return l[amt:] + l[:amt]
 
-def split(l, rounding = "up"):
-    """Generate a list from first and len / 2 values, recursively"""
-
-    result = []
-    round_up = False if "down" in rounding else True
-
-def distribute(vals, l, rounding = "up"):
-    """Distribute values list (vals) across list (l) as evenly as possible"""
-
-    pass
-
-def interpolate(val1, val2, num: Optional[int] = 1, func = "linear"):
+def interpolate(val1, val2, num: Optional[int] = 1, func = "linear", rounding_style: str = "none"):
     """Interpolate num values between val1 and val2"""
 
     if val1 == val2: return [val1 for _ in range(num)]
 
     mult = (val2 - val1) / (num + 1)
 
-    return [val1 + (mult * i) for i in range(1, num + 1)]
+    return [rounder(val1 + (mult * i), rounding_style) for i in range(1, num + 1)]
 
 # Generator functions
 
@@ -217,7 +221,8 @@ class Sequence():
 
     def replace(self, sequence, beat: int = 1, style: Optional[str] = None):
         """Replace portion of sequence"""
-        if not style: style = self.getopts('replace-style')
+
+        style = style or self.getopts('replace-style')
 
         if len(sequence) > self.steps: self.set(sequence)
 
@@ -242,7 +247,8 @@ class Sequence():
 
     def shift(self, amount: int = DEFAULT_SHIFT, style: Optional[str] = None):
         """Shift sequence"""
-        if not style: style = self.getopts('shift-style')
+
+        style = style or self.getopts('shift-style')
 
         if style == 'absolute':
             amount -= self.offset
@@ -254,7 +260,11 @@ class Sequence():
 
         return self
 
-    def stretch_to(self, size: Optional[int], style: Optional[str] = None):
+    def stretch_to(self, size: Optional[int] = None, style: Optional[int|str] = -1,
+        *,
+        interpolate_style: Optional[str] = None,
+        interpolate_rounding: Optional[str] = None
+    ):
         """
         Stretch sequence to size, creating/removing intermediate values.
         Stretching to larger irregular sizes will try to spread values as
@@ -262,58 +272,136 @@ class Sequence():
         like [1,0,2,3,0,4] and to size 7: [1,0,2,0,3,0,4]
         """
 
-        if not style: style = self.getopts('stretch-with')
+        if not size: return self
+
+        style = self.getopts('stretch-with') if style is None or (type(style) == int and style < 0) else style
+        interpolate_style = interpolate_style or self.getopts('interpolate-style')
+        interpolate_rounding = interpolate_rounding or self.getopts('interpolate-rounding')
 
         if size > self.steps:
             # get divisible and remainder
             num, extra = divmod(size, self.steps)
             num -= 1 # adjust for existing step entries
-            result = []
+
+            result = [[self.seq[i]] for i in range(self.steps)]
 
             # only automate adding markers if size is more than twice step count
             if size >= self.steps * 2:
-                for i in range(self.steps): result.append([self.seq[i]] + [-1 for _ in range(num)])
+                for i in range(self.steps): result[i] += [-1 for _ in range(num)]
 
-            # we have a remainder, need to distribute by euclidean model
-            model = generate_euclidean(len(result) + extra, len(result))
+            # convert result to a model with -1 as values to fill
+            if extra:
+                # we have a remainder, need to distribute by euclidean model
+                model = generate_euclidean(len(result) + extra, len(result))
 
-            # all zeros in model are the distributed items
-            distributed = its.chain.from_iterable([result.pop(0) if hit else [-1] for i in model])
+                # all zeros in model are the distributed items
+                result = list(its.chain.from_iterable([result.pop(0) if hit else [-1] for hit in model]))
+            else:
+                result = list(its.chain.from_iterable(result))
 
-            # TODO: need to replace -1 entries
+            # Replace -1 entries
             match style:
                 case int():
                     # integer replacement
-                    distributed = [style if i < 0 else i for i in distributed]
+                    result = [style if i < 0 else i for i in result]
                 case "repeat":
                     # repeat last value
-                    for ix in range(len(distributed)):
-                        if distributed[ix] < 0:
-                            distributed[ix] = distributed[ix - 1]
+                    for ix in range(len(result)):
+                        if result[ix] < 0:
+                            result[ix] = result[ix - 1]
                 case "interpolate":
-                    pass
+                    q = []
 
+                    # get bounding indices of interpolatable values
+                    for ix, val in enumerate(result):
+                        # add index to queue
+                        if val >= 0:
+                            q.append(ix)
+
+                        # handle 2 indices
+                        if len(q) >= 2:
+                            # get indices and reset q
+                            ix1, ix2, q = q[0], q[1], [] # get ixs and reset q
+
+                            # check for space beween indices
+                            if ix2 - ix1 > 1:
+                                # we have 2 indices with space between so can interpolate
+                                n = ix2 - ix1 - 1 # number of entries between indices
+
+                                # get interpolated values
+                                ivals = interpolate(result[ix1], result[ix2], n, interpolate_rounding)
+
+                                # sub values into sequence
+                                for vix, six in enumerate(range(ix1 + 1, ix2)):
+                                    result[six] = ivals[vix]
+
+                            q.append(ix2) # start again at second index
+
+                    # handle last elements (if necessary)
+                    if result[-1] < 0:
+                        last_ix = q[0] # index of last non-distributed element
+                        val = result[last_ix] # last value
+
+                        # set final distributed elements based on style
+                        match interpolate_style:
+                            case 'loop':
+                                # loop interpolation to first value
+                                n = len(result) - last_ix - 1 # number of entries
+
+                                # get interpolated values
+                                ivals = interpolate(val, result[0], n, interpolate_rounding)
+
+                                # replace with interpolated values
+                                for vix, six in enumerate(range(last_ix + 1, len(result))):
+                                    result[six] = ivals[vix]
+
+                            case 'repeat':
+                                # repeat last value
+                                for i in range(last_ix + 1, len(result)):
+                                    result[i] = val
 
             # cache and replace sequence
             if not self._cache: self._cache = self.seq
-            self.set(distributed)
+            self.set(result)
 
         elif size < self.steps:
             # get model to distribute items
             model = generate_euclidean(self.steps, size)
 
             # ones in model are remaining items
-            distributed = its.chain.from_iterable([self.seq[i] for i in self.steps if model[i]])
+            result = [self.seq[i] for i in range(self.steps) if model[i]]
 
             # cache and replace sequence
             if not self._cache: self._cache = self.seq
-            self.set(distributed)
+            self.set(result)
 
         return self
 
-    def stretch_by(self, mult: Optional[float] = 2, style: Optional[str] = None):
+    def stretch_by(self, mult: Optional[float] = 2, style: Optional[int|str] = -1,
+        *,
+        interpolate_style: Optional[str] = None,
+        interpolate_rounding: Optional[str] = None,
+        mult_rounding: Optional[str] = None
+    ):
         """Stretch sequence by multiplier, creating/removing intermediate values"""
-        pass
+        roundmethod = mult_rounding or self.getopts('global-rounding')
+        size = rounder(self.steps * mult, roundmethod)
+
+        return self.stretch_to(size, style,
+                               interpolate_style = interpolate_style,
+                               interpolate_rounding = interpolate_rounding)
+
+    def shrink_to(self, *args, **kwargs):
+        """Alias for stretch_to()"""
+
+        return self.stretch_to(*args, **kwargs)
+
+    def shrink_by(self, div, *args, **kwargs):
+        """Reverse of stretch_by() (as in will divide instead of multiply)"""
+
+        mult = 1 / div
+
+        return self.stretch_by(mult, *args, **kwargs)
 
     def expand_to(self, size: Optional[int], style: Optional[str] = None):
         """Expand sequence to size, adding/removing values at end"""
@@ -323,6 +411,14 @@ class Sequence():
         """Expand sequence by multiplier, adding/removing values at end"""
         pass
 
+    def contract_to(self):
+        """Alias for expand_to()"""
+        pass
+
+    def contract_by(self):
+        """Reverse of expand_by() (as in will divide instead of multiply)"""
+        pass
+
     def reset(self):
         """Reset to original sequence (i.e. undo all)"""
         if self._cache:
@@ -330,6 +426,16 @@ class Sequence():
             self._cache = None
 
         return self
+
+    ## Step/value manipulation
+
+    def replace_value(self, value, rvalue, limit: int = 0):
+        """Replace specified value in sequence with another value"""
+        pass
+
+    def replace_step(self, step, value):
+        """Replace value at step with specified value"""
+        pass
 
     # Sequence querying
 

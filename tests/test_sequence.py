@@ -30,6 +30,14 @@ class TestList_Shift(unittest.TestCase):
         with self.subTest("Should cycle back"):
             self.assertSequenceEqual(sequence.list_shift(self.seq, -7), [3,4,5,1,2])
 
+class TestInterpolate(unittest.TestCase):
+    def test_interpolate(self):
+        with self.subTest("Should interpolate linearly between values"):
+            with self.subTest("Single intermediate"):
+                self.assertListEqual(sequence.interpolate(2,4),[3])
+            with self.subTest("Multiple intermediates"):
+                self.assertListEqual(sequence.interpolate(2,5,2),[3,4])
+
 class TestGenerateEuclidean(unittest.TestCase):
     def setUp(self):
         self.seq = sequence.Sequence()
@@ -260,16 +268,17 @@ class TestSequence(unittest.TestCase):
             self.assertEqual(self.seq.as_list(), [1,2,3,0])
 
     def test_stretch_to(self):
-        self.seq.set([1,2,3,4])
-
         with self.subTest("It should add zeros to fill"):
+            self.seq.set([1,2,3,4])
             self.assertListEqual(self.seq.stretch_to(8).as_list(), [1,0,2,0,3,0,4,0])
 
         with self.subTest("It should spread original values evenly"):
-            pass
+            self.seq.set([1,2,3,4])
+            self.assertListEqual(self.seq.stretch_to(7).as_list(), [1,0,2,0,3,0,4])
 
         with self.subTest("It should shrink sequence if necessary"):
-            pass
+            self.seq.set([1,2,3,4])
+            self.assertListEqual(self.seq.stretch_to(2).as_list(), [1,3])
 
     def test_stretch_to_with_int(self):
         self.seq.set([1,2,3,4])
@@ -279,13 +288,53 @@ class TestSequence(unittest.TestCase):
             self.assertListEqual(self.seq.stretch_to(8).as_list(), [1,9,2,9,3,9,4,9])
 
     def test_stretch_to_with_repeat(self):
-        pass
+        self.seq.set([1,2,3,4])
+        self.seq.setopts('stretch-with', 'repeat')
+
+        with self.subTest("It should repeat stretched items"):
+            self.assertListEqual(self.seq.stretch_to(8).as_list(), [1,1,2,2,3,3,4,4])
 
     def test_stretch_to_with_interpolate(self):
-        pass
+        self.seq.set([1,2,4,8])
+        self.seq.setopts('stretch-with', 'interpolate')
+
+        with self.subTest("It should interpolate between items"):
+            self.assertListEqual(self.seq.stretch_to(8).as_list(), [1,1.5,2,3,4,6,8,4.5])
+
+        self.seq.set([1,2,4,8])
+        with self.subTest("It should repeat last item if specified"):
+            self.seq.setopts('interpolate-style', 'repeat')
+            self.assertListEqual(self.seq.stretch_to(8).as_list(), [1,1.5,2,3,4,6,8,8])
+
+        self.seq.set([1,2,4,8,10])
+        with self.subTest("It should work with uneven length sequences"):
+            self.seq.setopts('interpolate-style', 'loop')
+            self.assertListEqual(self.seq.stretch_to(8).as_list(), [1,1.5,2,4,6,8,10,5.5])
+
+        with self.subTest("It should work with no replacement at end"):
+            self.seq.set([1,2,4,8,10])
+            self.assertListEqual(self.seq.stretch_to(7).as_list(), [1,1.5,2,4,6,8,10])
 
     def test_stretch_by(self):
-        pass
+        with self.subTest("Stretch should be multiple of source length"):
+            self.seq.set([1,2,3,4])
+            self.seq.setopts('global-rounding', 'auto')
+
+            self.assertListEqual(self.seq.stretch_by(2).as_list(), [1,0,2,0,3,0,4,0])
+
+    def test_shrink_to(self):
+        with self.subTest("It should add zeros to fill"):
+            self.seq.set([1,2,3,4])
+            self.assertListEqual(self.seq.shrink_to(8).as_list(), [1,0,2,0,3,0,4,0])
+
+        with self.subTest("It should shrink sequence if necessary"):
+            self.seq.set([1,2,3,4])
+            self.assertListEqual(self.seq.shrink_to(2).as_list(), [1,3])
+
+    def test_shrink_by(self):
+        with self.subTest("Shrink should be multiple of source length"):
+            self.seq.set([1,2,3,4])
+            self.assertListEqual(self.seq.shrink_by(2).as_list(), [1,3])
 
     def test_expand_to(self):
         pass
@@ -297,6 +346,12 @@ class TestSequence(unittest.TestCase):
         pass
 
     def test_expand_to_with_loop(self):
+        pass
+
+    def test_contract_to(self):
+        pass
+
+    def test_contract_by(self):
         pass
 
     def test_reset(self):
