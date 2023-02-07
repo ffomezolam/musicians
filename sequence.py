@@ -18,11 +18,12 @@ DEFAULT_HITS = 4
 DEFAULT_OPTS = {
     "shift-style": "relative", # "relative", "absolute"
     "stretch-with": 0, # int fills with value, "repeat" each hit, "interpolate"
-    "expand-with": 0, # int fills with value, "repeat" last value, "loop" sequence
+    "expand-with": 0, # int fills with value, "repeat" last value, "loop" sequence, "interpolate" to start
     "replace-style": "expand", # "trim" trims input to length, "expand" expands to fit all
     "interpolate-style": "loop", # "repeat" last value, "loop" to first value
     "interpolate-rounding": "none", # "none", "auto", "up", "down"
     "global-rounding": "auto", # "auto", "up", "down"
+    "loop-length": 0, # 0 for entire loop, int for last n items
 }
 
 # Helper functions
@@ -361,8 +362,7 @@ class Sequence():
                                     result[i] = val
 
             # cache and replace sequence
-            if not self._cache: self._cache = self.seq
-            self.set(result)
+            self._cache_for(result)
 
         elif size < self.steps:
             # get model to distribute items
@@ -372,8 +372,7 @@ class Sequence():
             result = [self.seq[i] for i in range(self.steps) if model[i]]
 
             # cache and replace sequence
-            if not self._cache: self._cache = self.seq
-            self.set(result)
+            self._cache_for(result)
 
         return self
 
@@ -403,9 +402,54 @@ class Sequence():
 
         return self.stretch_by(mult, *args, **kwargs)
 
-    def expand_to(self, size: Optional[int], style: Optional[str] = None):
+    def expand_to(self, size: Optional[int], style: Optional[int|str] = -1,
+        *,
+        loop_length: Optional[int] = None):
         """Expand sequence to size, adding/removing values at end"""
-        pass
+
+        seq = self.seq
+
+        # get options
+        style = self.getopts('expand-with') if style is None or (type(style) == int and style < 0) else style
+        loop_length = loop_length if type(loop_length) == int else self.getopts('loop-length')
+
+        if 'loop-' in style:
+            loop_length = int(style.split('-')[1])
+
+        # expand by style
+        if size > self.steps:
+            match style:
+                case int():
+                    # fill with int
+                    n = style
+                    for _ in range(self.steps, size):
+                        seq.append(n)
+
+                case "repeat":
+                    # fill with last value
+                    n = seq[-1]
+                    for _ in range(self.steps, size):
+                        seq.append(n)
+
+                case "loop":
+                    # adjust loop length for 0 value
+                    if not loop_length: loop_length = self.steps
+
+                    # create loop
+                    loop = seq[-loop_length:]
+
+                    # append loop to new end
+                    for i in range(size - self.steps):
+                        seq.append(loop[i % len(loop)])
+
+                case "interpolate":
+                    pass
+
+        elif size < self.steps:
+            pass
+
+        # cache and replace
+        self._cache_for(seq)
 
     def expand_by(self, size: Optional[int] = 2, style: Optional[str] = None):
         """Expand sequence by multiplier, adding/removing values at end"""
@@ -425,6 +469,12 @@ class Sequence():
             self.set(self._cache)
             self._cache = None
 
+        return self
+
+    def _cache_for(new_seq: list):
+        """Cache sequence and replace with new_seq"""
+        if not self._cache: self._cache = self.seq
+        self.set(new_seq)
         return self
 
     ## Step/value manipulation
