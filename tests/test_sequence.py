@@ -337,25 +337,98 @@ class TestSequence(unittest.TestCase):
             self.assertListEqual(self.seq.shrink_by(2).as_list(), [1,3])
 
     def test_expand_to(self):
-        pass
+        with self.subTest("It should add zeros to end"):
+            self.seq.set([1,2,3,4])
+            self.assertListEqual(self.seq.expand_to(6).as_list(), [1,2,3,4,0,0])
 
     def test_expand_to_with_int(self):
-        pass
+        with self.subTest("It should add int if specified"):
+            self.seq.set([1,2])
+            self.seq.setopts('expand-with', 5)
+            self.assertListEqual(self.seq.expand_to(4).as_list(), [1,2,5,5])
 
     def test_expand_to_with_repeat(self):
-        pass
+        with self.subTest("It should repeat last value if specified"):
+            self.seq.set([1,2,3])
+            self.seq.setopts('expand-with', 'repeat')
+            self.assertListEqual(self.seq.expand_to(5).as_list(), [1,2,3,3,3])
 
     def test_expand_to_with_loop(self):
-        pass
+        with self.subTest("It should loop sequence if specified"):
+            self.seq.set([1,2,3])
+            self.seq.setopts('expand-with', 'loop')
+            self.assertListEqual(self.seq.expand_to(8).as_list(), [1,2,3,1,2,3,1,2])
+
+        with self.subTest("It should set loop length by options"):
+            self.seq.set([1,2,3])
+            self.seq.setopts('expand-with', 'loop-2')
+            self.assertListEqual(self.seq.expand_to(8).as_list(), [1,2,3,2,3,2,3,2])
+
+        with self.subTest("It should set loop length by argument"):
+            self.seq.set([1,2,3,4])
+            self.seq.setopts('expand-with', 'loop-2') # arg should override this
+            self.assertListEqual(self.seq.expand_to(8, loop_length=3).as_list(), [1,2,3,4,2,3,4,2])
+
+    def test_expand_to_with_interpolate(self):
+        with self.subTest("It should interpolate end to start"):
+            self.seq.set([1,5,8,4])
+            self.seq.setopts('expand-with', 'interpolate')
+            self.assertListEqual(self.seq.expand_to(6).as_list(), [1,5,8,4,3,2])
+
+    def test_expand_by(self):
+        with self.subTest("It should expand by multiplier"):
+            self.seq.set([1,2,3])
+            self.assertListEqual(self.seq.expand_by(3, style='loop-2').as_list(), [1,2,3,2,3,2,3,2,3])
+
+        with self.subTest("It should contract if necessary"):
+            self.seq.set([1,2,3,4])
+            self.assertListEqual(self.seq.expand_by(0.5).as_list(), [1,2])
 
     def test_contract_to(self):
-        pass
+        with self.subTest("It should expand if necessary"):
+            self.seq.set([1,2])
+            self.assertListEqual(self.seq.contract_to(4, 'repeat').as_list(), [1,2,2,2])
+
+        with self.subTest("It should contract if necessary"):
+            self.seq.set([1,2,3,4,5,6,7])
+            self.assertListEqual(self.seq.contract_to(3, 3).as_list(), [1,2,3])
 
     def test_contract_by(self):
-        pass
+        with self.subTest("It should expand if necessary"):
+            self.seq.set([1,2])
+            self.assertListEqual(self.seq.contract_by(0.5, 4).as_list(), [1,2,4,4])
+
+        with self.subTest("It should contract if necessary"):
+            self.seq.set([1,2,3,4])
+            self.assertListEqual(self.seq.contract_by(2, 'interpolate').as_list(), [1,2])
+
+    def test_reverse(self):
+        self.seq.set([1,2,3,4])
+        self.assertListEqual(self.seq.reverse().as_list(), [4,3,2,1])
+
+    def test_loop(self):
+        with self.subTest("It should loop n times"):
+            self.seq.set([1,2,3])
+            self.assertListEqual(self.seq.loop(3).as_list(), [1,2,3,1,2,3,1,2,3])
+
+        with self.subTest("It should reverse loop on negative input"):
+            self.seq.set([1,2,3])
+            self.assertListEqual(self.seq.loop(-3).as_list(), [3,2,1,3,2,1,3,2,1])
 
     def test_reset(self):
-        pass
+        self.seq.set([1,2,3,4])
+        self.seq.expand_to(7)
+        with self.subTest("Manipulators should cache original sequence"):
+            self.assertListEqual(self.seq._cache, [1,2,3,4])
+            self.assertListEqual(self.seq.seq, [1,2,3,4,0,0,0])
+
+        self.seq.reset()
+
+        with self.subTest("Reset should revert original sequence"):
+            self.assertListEqual(self.seq.seq, [1,2,3,4])
+
+        with self.subTest("Reset should erase cache"):
+            self.assertIsNone(self.seq._cache)
 
 if __name__ == '__main__':
     unittest.main()

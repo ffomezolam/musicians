@@ -376,7 +376,7 @@ class Sequence():
 
         return self
 
-    def stretch_by(self, mult: Optional[float] = 2, style: Optional[int|str] = -1,
+    def stretch_by(self, mult: Optional[int|float] = 2, style: Optional[int|str] = -1,
         *,
         interpolate_style: Optional[str] = None,
         interpolate_rounding: Optional[str] = None,
@@ -395,7 +395,7 @@ class Sequence():
 
         return self.stretch_to(*args, **kwargs)
 
-    def shrink_by(self, div, *args, **kwargs):
+    def shrink_by(self, div: Optional[int|float] = 2, *args, **kwargs):
         """Reverse of stretch_by() (as in will divide instead of multiply)"""
 
         mult = 1 / div
@@ -403,18 +403,36 @@ class Sequence():
         return self.stretch_by(mult, *args, **kwargs)
 
     def expand_to(self, size: Optional[int], style: Optional[int|str] = -1,
-        *,
-        loop_length: Optional[int] = None):
+                  *,
+                  loop_length: Optional[int] = None,
+                  interpolate_rounding: Optional[str] = None
+    ):
         """Expand sequence to size, adding/removing values at end"""
 
-        seq = self.seq
-
         # get options
-        style = self.getopts('expand-with') if style is None or (type(style) == int and style < 0) else style
-        loop_length = loop_length if type(loop_length) == int else self.getopts('loop-length')
+        if style is None or (type(style) == int and style < 0):
+            # get default if not set
+            style = self.getopts('expand-with')
 
-        if 'loop-' in style:
-            loop_length = int(style.split('-')[1])
+        # get loop options if style is loop
+        if type(style) == str and 'loop' in style:
+
+            if loop_length is None:
+                if 'loop-' in style:
+                    loop_length = int(style.split('-')[1])
+                else:
+                    loop_length = self.getopts('loop-length')
+
+            elif loop_length == 0:
+                # set loop to entire sequence
+                loop_length = self.steps
+
+            style = 'loop'
+
+        interpolate_rounding = interpolate_rounding or self.getopts('interpolate-rounding')
+
+        # copy sequence for adjustments
+        seq = self.seq.copy()
 
         # expand by style
         if size > self.steps:
@@ -422,13 +440,13 @@ class Sequence():
                 case int():
                     # fill with int
                     n = style
-                    for _ in range(self.steps, size):
+                    for _ in range(size - self.steps):
                         seq.append(n)
 
                 case "repeat":
                     # fill with last value
                     n = seq[-1]
-                    for _ in range(self.steps, size):
+                    for _ in range(size - self.steps):
                         seq.append(n)
 
                 case "loop":
@@ -443,49 +461,105 @@ class Sequence():
                         seq.append(loop[i % len(loop)])
 
                 case "interpolate":
-                    pass
+                    # get interpolated values
+                    start = seq[-1]
+                    end = seq[0]
+                    n = size - self.steps
+
+                    ivals = interpolate(start, end, n, rounding_style = interpolate_rounding)
+
+                    # insert interpolated values into sequence
+                    for ival in ivals:
+                        seq.append(ival)
 
         elif size < self.steps:
-            pass
+            # trim end of sequence
+            seq = self.seq[:size]
 
         # cache and replace
         self._cache_for(seq)
 
-    def expand_by(self, size: Optional[int] = 2, style: Optional[str] = None):
+        return self
+
+    def expand_by(self, mult: Optional[int|float] = 2, style: Optional[int|str] = -1,
+                  *,
+                  mult_rounding: Optional[str] = None,
+                  **kwargs
+    ):
         """Expand sequence by multiplier, adding/removing values at end"""
-        pass
 
-    def contract_to(self):
+        roundmethod = mult_rounding or self.getopts('global-rounding')
+        size = rounder(self.steps * mult, roundmethod)
+
+        return self.expand_to(size, style, **kwargs)
+
+    def contract_to(self, *args, **kwargs):
         """Alias for expand_to()"""
-        pass
 
-    def contract_by(self):
+        return self.expand_to(*args, **kwargs)
+
+    def contract_by(self, div: Optional[int|float] = 2, *args, **kwargs):
         """Reverse of expand_by() (as in will divide instead of multiply)"""
-        pass
+
+        mult = 1 / div
+
+        return self.expand_by(mult, *args, **kwargs)
+
+    def reverse(self):
+        """Reverse sequence"""
+
+        seq = list(reversed(self.seq))
+
+        self._cache_for(seq)
+
+        return self
+
+    def loop(self, n: int = 2):
+        """Copy sequence n times"""
+
+        if n != 0:
+            is_neg = n < 0
+            n = abs(n)
+
+            self.expand_by(n, 'loop')
+
+            if is_neg:
+                self.reverse()
+
+        return self
 
     def reset(self):
         """Reset to original sequence (i.e. undo all)"""
+
         if self._cache:
             self.set(self._cache)
             self._cache = None
 
         return self
 
-    def _cache_for(new_seq: list):
+    def _cache_for(self, new_seq: list):
         """Cache sequence and replace with new_seq"""
+
         if not self._cache: self._cache = self.seq
         self.set(new_seq)
+
         return self
 
     ## Step/value manipulation
 
     def replace_value(self, value, rvalue, limit: int = 0):
         """Replace specified value in sequence with another value"""
-        pass
+
+        self.set([rvalue if step == value else step for step in self.seq])
+
+        return self
 
     def replace_step(self, step, value):
         """Replace value at step with specified value"""
-        pass
+
+        self[step] = value
+
+        return self
 
     # Sequence querying
 
@@ -501,21 +575,22 @@ class Sequence():
         return self.steps
 
     def __getitem__(self, beat: int):
-        """Get hit by bracket notation"""
+        """Get step by bracket notation"""
         return self.seq[beat - 1]
 
     def __setitem__(self, beat: int, value: int):
-        """Set hit by bracket notation"""
+        """Set step by bracket notation"""
         self.seq[beat - 1] = value
 
     def __iter__(self):
         """Iterate over hits"""
+
         return (i for i in self.seq)
 
     # String representation
 
     def __repr__(self):
-        return f'{self.seq}'
+        return f'Sequence({self.seq})'
 
     def __str__(self):
         return f'{self.steps}:{self.hits} {self.seq}'
