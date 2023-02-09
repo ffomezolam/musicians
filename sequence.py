@@ -47,14 +47,6 @@ def rounder(n, style: str = "auto"):
         case _:
             return n
 
-def list_shift(l: list, amt: int = 0):
-    """Helper function for shifting a standard python list"""
-    if not amt: return l
-
-    amt = -mod(amt, len(l)) # allow for amounts above length
-
-    return l[amt:] + l[:amt]
-
 def interpolate(val1, val2, num: Optional[int] = 1, func = "linear", rounding_style: str = "none"):
     """Interpolate num values between val1 and val2"""
 
@@ -63,6 +55,16 @@ def interpolate(val1, val2, num: Optional[int] = 1, func = "linear", rounding_st
     mult = (val2 - val1) / (num + 1)
 
     return [rounder(val1 + (mult * i), rounding_style) for i in range(1, num + 1)]
+
+# Sequence manipulation functions
+
+def shift_seq(l: list, amt: int = 0):
+    """Helper function for shifting a standard python list"""
+    if not amt: return l
+
+    amt = -mod(amt, len(l)) # allow for amounts above length
+
+    return l[amt:] + l[:amt]
 
 # Generator functions
 
@@ -81,7 +83,7 @@ def generate_euclidean(steps: int = DEFAULT_STEPS, hits: int = DEFAULT_HITS, shi
         steps = len(coll)
 
     coll = list(its.chain.from_iterable(coll))
-    if shift: coll = list_shift(coll, shift)
+    if shift: coll = shift_seq(coll, shift)
 
     return coll
 
@@ -280,10 +282,10 @@ class Sequence():
 
         if style == 'absolute':
             amount -= self.offset
-            self.seq = list_shift(self.seq, amount)
+            self.seq = shift_seq(self.seq, amount)
             self.offset = amount
         else:
-            self.seq = list_shift(self.seq, amount)
+            self.seq = shift_seq(self.seq, amount)
             self.offset += amount
 
         return self

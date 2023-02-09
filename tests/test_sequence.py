@@ -16,19 +16,19 @@ class TestMod(unittest.TestCase):
     def test_negative_positive(self):
         self.assertEqual(sequence.mod(-5,4), -1)
 
-class TestList_Shift(unittest.TestCase):
+class TestShift_seq(unittest.TestCase):
     def setUp(self):
         self.seq = [1,2,3,4,5]
 
     def test_shift(self):
         with self.subTest("Should shift forward"):
-            self.assertSequenceEqual(sequence.list_shift(self.seq, 2), [4,5,1,2,3])
+            self.assertSequenceEqual(sequence.shift_seq(self.seq, 2), [4,5,1,2,3])
         with self.subTest("Should shift back"):
-            self.assertSequenceEqual(sequence.list_shift(self.seq, -2), [3,4,5,1,2])
+            self.assertSequenceEqual(sequence.shift_seq(self.seq, -2), [3,4,5,1,2])
         with self.subTest("Should cycle forward"):
-            self.assertSequenceEqual(sequence.list_shift(self.seq, 7), [4,5,1,2,3])
+            self.assertSequenceEqual(sequence.shift_seq(self.seq, 7), [4,5,1,2,3])
         with self.subTest("Should cycle back"):
-            self.assertSequenceEqual(sequence.list_shift(self.seq, -7), [3,4,5,1,2])
+            self.assertSequenceEqual(sequence.shift_seq(self.seq, -7), [3,4,5,1,2])
 
 class TestInterpolate(unittest.TestCase):
     def test_interpolate(self):
