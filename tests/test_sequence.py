@@ -117,7 +117,7 @@ class TestSequence(unittest.TestCase):
 
         self.assertListEqual([1,2,3], self.seq())
 
-    # sequence manipulation
+    # sequence creation
 
     def test_set_by_list(self):
         with self.subTest("Should return instance"):
@@ -223,6 +223,8 @@ class TestSequence(unittest.TestCase):
 
         self.assertListEqual([1,2,5,6,7], self.seq.replace([5,6,7], 3).as_list())
 
+    # sequence manipulation
+
     def test_shift(self):
         with self.subTest("Should return instance"):
             self.assertIs(self.seq, self.seq.shift())
@@ -234,6 +236,7 @@ class TestSequence(unittest.TestCase):
         with self.subTest("Sequence should shift forward 1"):
             self.seq.shift(1)
             self.assertEqual(self.seq.as_list(), [3,0,1,2])
+            self.assertEqual(self.seq.offset, 1)
 
         with self.subTest("Sequence should shift forward 2"):
             self.seq.shift(2)

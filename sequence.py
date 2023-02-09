@@ -123,8 +123,18 @@ class Sequence():
 
     # Option handling
 
-    def setopts(self, opts: Optional[dict|str] = DEFAULT_OPTS, val = None):
-        """Set instance options"""
+    def setopts(self, opts: Optional[dict|str] = DEFAULT_OPTS, val: Optional[str] = None):
+        """
+        Set instance options
+
+        Parameters
+        ----------
+        opts: [dict|str]
+            dict of options to set or, with second parameter, the key of an option to set
+        val: [str]
+            with string argument to opts, the value to set to the key
+        """
+
         if opts:
             if type(opts) == dict:
                 for k, v in opts.items():
@@ -136,15 +146,32 @@ class Sequence():
         return self
 
     def getopts(self, opt: Optional[str] = None):
-        """Get instance options"""
+        """
+        Get instance options
+
+        Parameters
+        ----------
+        opt: [str]
+            If specified, get the value associated with this option key.
+            Otherwise, return full dict of options.
+        """
+
         if not opt: return self._opts
 
         return self._opts.get(opt, None)
 
     # Sequence creation
 
-    def set(self, sequence: Optional[list|Sequence] = None):
-        """Set sequence"""
+    def set(self, sequence: Optional[list|int|Sequence] = None):
+        """
+        Set sequence, including getting number of steps and hits, and zeroing offset
+
+        sequence: [list|int|Sequence]
+            If not specified, set a blank sequence with default settings.
+            If int, set a blank sequence with specified number of steps.
+            If a Sequence instance, copy the sequence.
+            If a list, set sequence to list.
+        """
         if not sequence:
             # set to a blank sequence
             return self.set([0 for _ in range(DEFAULT_STEPS)])
