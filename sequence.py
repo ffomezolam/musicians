@@ -17,7 +17,7 @@ from sequence_defaults import *
 
 def mod(a, b):
     """
-    Helper function for correct modulo operations on negative numbers.
+    Helper function for alternative modulo operations on negative numbers.
     From https://stackoverflow.com/questions/3883004/how-does-the-modulo-operator-work-on-negative-numbers-in-python
     """
     r = a % b
@@ -267,6 +267,7 @@ class Sequence():
 
         style = style or self.getopts('shift-style')
 
+        # shift sequence
         if style == 'absolute':
             amount -= self.offset
             self.seq = shift_seq(self.seq, amount)
@@ -274,6 +275,9 @@ class Sequence():
         else:
             self.seq = shift_seq(self.seq, amount)
             self.offset += amount
+
+        # wrap offset
+        self.offset = mod(self.offset, self.steps)
 
         return self
 
