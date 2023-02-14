@@ -15,7 +15,7 @@ DEFAULT_HITS = 4
 DEFAULT_SHIFT = 0
 
 # default sequence options
-DEFAULT_OPTS = {
+DEFAULT_SEQUENCE_OPTS = {
     # how to handle shifting sequences
     "shift-style": "relative", # "relative", "absolute"
 
@@ -39,6 +39,15 @@ DEFAULT_OPTS = {
 
     # length of loop when looping
     "loop-length": 0, # 0 for entire loop, int for last n items
+}
+
+# default sequencegroup options
+DEFAULT_SEQUENCEGROUP_OPTS = {
+    # default sizing behavior when initializing groups
+    "init-size-style": "longest", # "longest", "shortest", "first", "last"
+
+    # default expansion behavior when initializing groups
+    "init-expand-style": 0, # same opts as sequence "expand-with" opt
 }
 
 # initial group labels

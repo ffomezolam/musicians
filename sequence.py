@@ -9,6 +9,8 @@ from typing import Optional
 import itertools as its
 import math
 
+from opts import OptsMixin
+
 # Global defaults
 
 from sequence_defaults import *
@@ -76,7 +78,7 @@ def generate_euclidean(steps: int = DEFAULT_STEPS, hits: int = DEFAULT_HITS, shi
 
 # Class code
 
-class Sequence():
+class Sequence(OptsMixin):
     """
     Class representing a single musical sequence. For purposes of this class,
     all indices are represented as beats, and therefore counting starts at 1.
@@ -97,7 +99,10 @@ class Sequence():
         the sequence as a list
     """
 
-    def __init__(self, sequence: Optional[list] = None, options: Optional[dict] = None):
+    def __init__(self, sequence: Optional[list] = None,
+                 *,
+                 options: Optional[dict] = None
+    ):
         self.steps = 0
         self.hits = 0
         self.offset = 0
@@ -105,49 +110,13 @@ class Sequence():
         self.seq = None
         self._cache = None
 
-        self._opts = DEFAULT_OPTS.copy()
+        # self._opts created by OptsMixin
+        OptsMixin.__init__(self, DEFAULT_SEQUENCE_OPTS)
 
         self.setopts(options)
         self.set(sequence)
 
-    # Option handling
-
-    def setopts(self, opts: Optional[dict|str] = DEFAULT_OPTS, val: Optional[str] = None):
-        """
-        Set instance options
-
-        Parameters
-        ----------
-        opts: [dict|str]
-            dict of options to set or, with second parameter, the key of an option to set
-        val: [str]
-            with string argument to opts, the value to set to the key
-        """
-
-        if opts:
-            if type(opts) == dict:
-                for k, v in opts.items():
-                    if k in self._opts: self._opts[k] = v
-            elif val:
-                k, v = opts, val
-                if k in self._opts: self._opts[k] = v
-
-        return self
-
-    def getopts(self, opt: Optional[str] = None):
-        """
-        Get instance options
-
-        Parameters
-        ----------
-        opt: [str]
-            If specified, get the value associated with this option key.
-            Otherwise, return full dict of options.
-        """
-
-        if not opt: return self._opts
-
-        return self._opts.get(opt, None)
+    # Option handling pulled in by OptsMixin class
 
     # Sequence creation
 
@@ -180,7 +149,7 @@ class Sequence():
 
     def copy(self):
         """Create copy of sequence"""
-        return Sequence(self.seq, self._opts)
+        return Sequence(self.seq, options = self._opts)
 
     def insert(self, sequence, beat: int = 1):
         """

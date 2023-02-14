@@ -3,11 +3,6 @@
 from context import sequence
 
 import unittest
-import numpy as np
-
-# helper for numpy truth tests
-def test_equal(a, b):
-    return (a == b).all()
 
 class TestMod(unittest.TestCase):
     def test_positive_positive(self):

@@ -21,13 +21,14 @@ class SequenceGroup():
     A group of sequences that works as a unit
     """
 
-    def __init__(self,
-                 seqs: list[Sequence]|dict,
-                 labels: Optional[list] = None
-    ):
-        self.seqs = {}
+    def __init__(self, seqs: list[Sequence]|dict, labels: Optional[list] = None):
+        self.steps = 0
+        self.hits = 0
+        self.offset = 0
 
-        self.add(seqs, labels=labels)
+        self.seqs = []
+
+        self._opts = DEFAULT_SEQUENCEGROUP_OPTS.copy()
 
     def add(self, seqs: list[Sequence]|dict, labels: Optional[list] = None):
         """
