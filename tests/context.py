@@ -7,6 +7,9 @@ import sys
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 # import used modules
-import sequence
 import opts
+import helpers
+import sequence_base
+import sequence
 import sequence_group
+import Note

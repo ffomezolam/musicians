@@ -43,11 +43,17 @@ DEFAULT_SEQUENCE_OPTS = {
 
 # default sequencegroup options
 DEFAULT_SEQUENCEGROUP_OPTS = {
-    # default sizing behavior when initializing groups
+    # how to size sequences when initializing a group
     "init-size-style": "longest", # "longest", "shortest", "first", "last"
 
-    # default expansion behavior when initializing groups
-    "init-expand-style": 0, # same opts as sequence "expand-with" opt
+    # expansion behavior when adding sequences
+    "expand-style": 0, # same opts as sequence "expand-with" opt
+
+    # contracting behavior when adding sequences
+    "contract-style": "trim", # "trim", "shrink"
+
+    # whether to override sequence options with group options
+    "override-opts": "true", # "true", "false"
 }
 
 # initial group labels

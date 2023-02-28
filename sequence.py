@@ -2,12 +2,16 @@
 ---------------
 All things Sequencing
 """
+# TODO: Need to ensure that a sequence can hold arbitrary structures (e.g. a
+# Note instance) and perform all operations adequately
 
 from __future__ import annotations
 from typing import Optional
 
 import itertools as its
 import math
+
+# Instance option methods
 
 from opts import OptsMixin
 
@@ -17,68 +21,23 @@ from sequence_defaults import *
 
 # Helper functions
 
-def mod(a, b):
-    """
-    Helper function for alternative modulo operations on negative numbers.
-    From https://stackoverflow.com/questions/3883004/how-does-the-modulo-operator-work-on-negative-numbers-in-python
-    """
-    r = a % b
-    return r - b if a < 0 else r
+from helpers import mod, rounder, interpolate
 
-def rounder(n, style: str = "auto"):
-    match style:
-        case "auto":
-            return int(n + 0.5)
-        case "up":
-            return math.ceil(n)
-        case "down":
-            return math.floor(n)
-        case _:
-            return n
+# Sequence base class
 
-def interpolate(val1, val2, num: Optional[int] = 1, func = "linear", rounding_style: str = "none"):
-    """Interpolate num values between val1 and val2"""
-
-    if val1 == val2: return [val1 for _ in range(num)]
-
-    mult = (val2 - val1) / (num + 1)
-
-    return [rounder(val1 + (mult * i), rounding_style) for i in range(1, num + 1)]
+from sequence_base import SequenceBase
 
 # Sequence manipulation functions
 
-def shift_seq(l: list, amt: int = 0):
-    """Helper function for shifting a standard python list"""
-    if not amt: return l
-
-    amt = -mod(amt, len(l)) # allow for amounts above length
-
-    return l[amt:] + l[:amt]
+from sequence_base import shift_seq
 
 # Generator functions
 
-def generate_euclidean(steps: int = DEFAULT_STEPS, hits: int = DEFAULT_HITS, shift: int = DEFAULT_SHIFT) -> list:
-    """Generate a euclidean rhythm as a python list"""
-
-    # create list with hits first and rests after
-    coll = [[1] if step < hits else [0] for step in range(steps)]
-    while hits > 1:
-        quotient, remainder = divmod(steps, hits)
-        for i in range(quotient - 1):
-            for j in range(hits):
-                item = coll.pop()
-                coll[j] += item
-        hits = remainder
-        steps = len(coll)
-
-    coll = list(its.chain.from_iterable(coll))
-    if shift: coll = shift_seq(coll, shift)
-
-    return coll
+from sequence_base import generate_euclidean
 
 # Class code
 
-class Sequence(OptsMixin):
+class Sequence(SequenceBase, OptsMixin):
     """
     Class representing a single musical sequence. For purposes of this class,
     all indices are represented as beats, and therefore counting starts at 1.
@@ -103,11 +62,9 @@ class Sequence(OptsMixin):
                  *,
                  options: Optional[dict] = None
     ):
-        self.steps = 0
-        self.hits = 0
-        self.offset = 0
+        # init base class for steps, hits, offset, and seq
+        SequenceBase.__init__(self)
 
-        self.seq = None
         self._cache = None
 
         # self._opts created by OptsMixin
@@ -116,7 +73,11 @@ class Sequence(OptsMixin):
         self.setopts(options)
         self.set(sequence)
 
-    # Option handling pulled in by OptsMixin class
+    # Option handling
+
+    # From OptsMixin class
+        # setopts()
+        # getopts()
 
     # Sequence creation
 
@@ -538,6 +499,9 @@ class Sequence(OptsMixin):
 
     def replace_value(self, value, rvalue, limit: int = 0):
         """Replace specified value in sequence with another value"""
+        # TODO: This is resetting the whole sequence - what if we want to
+        # preserve shift amount, offset, expansion, etc so we can undo those?
+        # Probably need to replace value in both seq and cache
 
         self.set([rvalue if step == value else step for step in self.seq])
 
@@ -545,6 +509,8 @@ class Sequence(OptsMixin):
 
     def replace_step(self, step, value):
         """Replace value at step with specified value"""
+        # TODO: Same as above - might need to replace something in cache
+        # as well
 
         self[step] = value
 
