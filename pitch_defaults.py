@@ -8,3 +8,4 @@ Default settings for pitch modules
 MIDDLE_C_OCTAVE = 4
 DEFAULT_NOTE = 'C'
 DEFAULT_OCTAVE = MIDDLE_C_OCTAVE
+DEFAULT_LEAN = 1

@@ -12,4 +12,5 @@ import helpers
 import sequence_base
 import sequence
 import sequence_group
-import Note
+import note
+import pitch
