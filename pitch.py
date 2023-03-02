@@ -14,7 +14,7 @@ from opts import OptsMixin
 
 # Defaults
 
-from pitch_defaults import MIDDLE_C_OCTAVE, DEFAULT_NOTE, DEFAULT_OCTAVE, DEFAULT_LEAN
+from pitch_defaults import *
 
 # Pitch offsets
 
@@ -55,6 +55,8 @@ OFFSET = {
 RE_NOTE = re.compile(r'([a-gA-G])([#sb]*)', re.A)
 RE_ACCIDENTAL = re.compile(r'()([#sb])()', re.A)
 RE_PITCH = re.compile(r'^\s*([a-gA-G])([#sb]*)\s*(-?\d{1,2})?\s*$', re.A)
+
+RE_WRAP = re.compile(WRAP_RE)
 
 # Helper functions
 
@@ -103,10 +105,23 @@ def _offset(o: str|int, lean: int = 1):
             case tuple():
                 return OFFSET[o][lean]
 
-def _midirange(val: int):
-    "Limit value to midi range"
-    if val < 0: val = 0
-    elif val > 127: val = 127
+def midirange(val: int, wrap: int = 0):
+    "Limit value to midi range or wrap"
+
+    if not wrap:
+        if val < MIDI_MIN: val = MIDI_MIN
+        elif val > MIDI_MAX: val = MIDI_MAX
+    else:
+        wrap = abs(wrap)
+
+        if val < MIDI_MIN:
+            val = abs(val)
+            val = wrap - (val % wrap)
+
+        if val > MIDI_MAX:
+            amt = val - MIDI_MAX
+            amt = wrap - (amt % wrap)
+            val = MIDI_MAX - amt
 
     return val
 
@@ -185,9 +200,12 @@ class Pitch(OptsMixin):
     ):
         self.value = None
 
-        OptsMixin.__init__(self)
+        # options
+        # TODO: Might not need opts. See pitch_defaults.py
+        OptsMixin.__init__(self, DEFAULT_PITCH_OPTS)
         self.setopts(options)
 
+        # set initial note
         self.set(note, octave)
 
     def set(self,
@@ -204,7 +222,7 @@ class Pitch(OptsMixin):
         if octave is None: octave = DEFAULT_OCTAVE
 
         if type(note) == int:
-            note = _midirange(note)
+            note = midirange(note)
             self.value = note
         else:
             n, a, o = parse_pitch(DEFAULT_NOTE)
@@ -213,6 +231,66 @@ class Pitch(OptsMixin):
 
             self.value = pitch_to_value(n + a + str(o))
 
+        return self
+
+    def transpose_semi(self, semi: int, wrap: int = 0):
+        "Transpose pitch by semitones"
+
+        self.value = midirange(self.value + semi, wrap)
+
+        return self
+
+    def transpose_octave(self, octave: int, wrap: int = 0):
+        "Transpose pitch by octaves"
+
+        self.value = midirange(self.value + (octave * 12), wrap)
+
+        return self
+
+    # Magic math
+
+    def __add__(self, other: int):
+        "+ operator returns new Pitch instance transposed up by semitones"
+
+        return Pitch(self.value + other)
+
+    def __sub__(self, other: int):
+        "- operator returns new Pitch instance transposed down by semitones"
+
+        return Pitch(self.value - other)
+
+    def __mul__(self, other: int):
+        "* operator returns new Pitch instance transposed up by octaves"
+
+        return Pitch(self.value + (other * 12))
+
+    def __truediv__(self, other: int):
+        "/ operator returns new Pitch instance transposed down by octaves"
+
+        return Pitch(self.value - (other * 12))
+
+    def __iadd__(self, other: int):
+        "+= operator adjusts instance value up by semitones"
+
+        self.transpose_semi(other)
+        return self
+
+    def __isub__(self, other: int):
+        "-= operator adjusts instance value down by semitones"
+
+        self.transpose_semi(-other)
+        return self
+
+    def __imul__(self, other: int):
+        "*= operator adjusts instance value up by octaves"
+
+        self.transpose_octave(other)
+        return self
+
+    def __itruediv__(self, other: int):
+        "/= operator adjusts instance value down by octaves"
+
+        self.transpose_octave(-other)
         return self
 
     # Printing
