@@ -110,13 +110,66 @@ class TestPitch(unittest.TestCase):
 
     def testSet(self):
         with self.subTest("Should accept note value"):
-            pass
+            self.p.set(100)
+            self.assertEqual(self.p.value, 100)
 
         with self.subTest("Should accept note name and octave separately"):
-            pass
+            self.p.set('D#', 4)
+            self.assertEqual(self.p.value, 63)
 
         with self.subTest("Should accept full note string"):
-            pass
+            self.p.set('Ab5')
+            self.assertEqual(self.p.value, 80)
+
+    def test_transpose_semi(self):
+        with self.subTest('It should transpose up'):
+            self.p.set(60)
+            self.assertEqual(self.p.transpose_semi(2).value, 62)
+
+        with self.subTest("It should transpose down"):
+            self.p.set(60)
+            self.assertEqual(self.p.transpose_semi(-2).value, 58)
+
+        with self.subTest("It should limit at upper midi bounds"):
+            self.p.set(120)
+            self.assertEqual(self.p.transpose(10).value, p.MIDI_MAX)
+
+        with self.subTest("It should limit at lower midi bounds"):
+            self.p.set(10)
+            self.assertEqual(self.p.transpose(-12).value, p.MIDI_MIN)
+
+        with self.subTest("It should wrap up if specified"):
+            self.p.set(120)
+            self.assertEqual(self.p.transpose(10, 12).value, 118)
+
+        with self.subTest("It should wrap down if specified"):
+            self.p.set(10)
+            self.assertEqual(self.p.transpose(-14, 12).value, 8)
+
+    def test_transpose_octave(self):
+        with self.subTest('It should transpose up'):
+            self.p.set(60)
+            self.assertEqual(self.p.transpose_octave(2).value, 84)
+
+        with self.subTest("It should transpose down"):
+            self.p.set(60)
+            self.assertEqual(self.p.transpose_octave(-2).value, 36)
+
+        with self.subTest("It should limit at upper midi bounds"):
+            self.p.set(100)
+            self.assertEqual(self.p.transpose_octave(3).value, p.MIDI_MAX)
+
+        with self.subTest("It should limit at lower midi bounds"):
+            self.p.set(24)
+            self.assertEqual(self.p.transpose_octave(-3).value, p.MIDI_MIN)
+
+        with self.subTest("It should wrap up if specified"):
+            self.p.set(120)
+            self.assertEqual(self.p.transpose_octave(1, 14).value, 118)
+
+        with self.subTest("It should wrap down if specified"):
+            self.p.set(10)
+            self.assertEqual(self.p.transpose_octave(-1, 10).value, 8)
 
 if __name__ == '__main__':
     unittest.main()

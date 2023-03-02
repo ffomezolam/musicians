@@ -146,7 +146,7 @@ def parse_pitch(p: str|int):
 
     pstr, accidental, octave = r[1] or DEFAULT_NOTE, r[2] or '', r[3] or DEFAULT_OCTAVE
 
-    return pstr, _normalize_accidental(accidental), int(octave)
+    return pstr, format_accidental(accidental), int(octave)
 
 def pitch_to_value(pstr: str, octave: Optional[int] = DEFAULT_OCTAVE,
                    *,
@@ -225,9 +225,9 @@ class Pitch(OptsMixin):
             note = midirange(note)
             self.value = note
         else:
-            n, a, o = parse_pitch(DEFAULT_NOTE)
+            n, a, o = parse_pitch(note)
 
-            if octave: o = octave
+            if o is None and octave is not None: o = octave
 
             self.value = pitch_to_value(n + a + str(o))
 
@@ -239,6 +239,11 @@ class Pitch(OptsMixin):
         self.value = midirange(self.value + semi, wrap)
 
         return self
+
+    def transpose(self, *args, **kwargs):
+        "Alias for transpose_semi()"
+
+        return self.transpose_semi(*args, **kwargs)
 
     def transpose_octave(self, octave: int, wrap: int = 0):
         "Transpose pitch by octaves"
