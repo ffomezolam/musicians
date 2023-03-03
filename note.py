@@ -1,4 +1,4 @@
-""" Note.py
+""" note.py
 -----------
 Class representing a musical note and helper functions for working with note
 data
@@ -7,26 +7,57 @@ data
 from __future__ import annotations
 from typing import Optional
 
-# Instance option methods
-
-from opts import OptsMixin
-
 # defaults
 
+from note_defaults import DEFAULT_PITCH, DEFAULT_VELOCITY, DEFAULT_DURATION
 from note_defaults import DEFAULT_NOTE_OPTS
 
-class Note(OptsMixin):
+# Supporting classes
+
+from pitch import Pitch
+from duration import Duration
+
+# Note class
+
+class Note():
     """
     Represents a musical note
     """
 
-    def __init__(self, pitch, velocity, duration,
-                 *,
-                 options: Optional[dict] = None
+    def __init__(self,
+                 pitch: Optional[int|str|Pitch|Note] = None,
+                 velocity: Optional[int] = None,
+                 duration: Optional[int|str|Duration] = None
     ):
-        self.pitch = pitch
-        self.velocity = velocity
-        self.duration = duration
+        self.pitch = None
+        self.velocity = None
+        self.duration = None
 
-        OptsMixin.__init__(self, DEFAULT_NOTE_OPTS)
-        self.setopts(options)
+        self.set(pitch, velocity, duration)
+
+    def set(self,
+            pitch: Optional[int|str|Pitch|Note] = None,
+            velocity: Optional[int] = None,
+            duration: Optional[int|str|Duration] = None
+    ):
+        match pitch:
+            case int() | str() | Pitch():
+                pass
+            case _:
+                self.pitch = DEFAULT_PITCH
+
+        match velocity:
+            case _:
+                self.velocity = DEFAULT_VELOCITY
+
+        match duration:
+            case _:
+                self.duration = DEFAULT_DURATION
+
+    # String representation
+
+    def __repr__(self):
+        pass
+
+    def __str__(self):
+        pass
