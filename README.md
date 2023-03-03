@@ -32,3 +32,30 @@ A sequence is a list with the indices called "beats" starting at 1.
 - `replace-style`: how to handle replacement if replacement sequence is too long
     - `trim`: trim replacement sequence to fit
     - `expand`: expand sequence to fit replacement
+- `interpolate-style`: how to handle interpolation of final hits
+    - `repeat`: repeat last hit
+    - `loop`: interpolate to first value
+- `interpolate-rounding`: how to round interpolation results
+    - `none`: no rounding
+    - `auto`: follow global rounding
+    - `up`: round up
+    - `down`: round down
+- `global-rounding`: how to round numbers when necessary
+    - `auto`: normal rounding
+    - `up`: round up
+    - `down`: round down
+- `loop-length`: length of loop when looping
+    - `0`: entire sequence
+    - `int`: last n items
+
+### pitch
+
+For working with pitches (note values not including duration and expression).
+
+The Pitch class can accept note values or human-readable notes (e.g.'C#4').
+Pitches are stored as midi values.
+For purposes of display and interaction, the default octave is 4.
+
+### note
+
+For working with musical notes (pitches plus duration and expression/velocity)
