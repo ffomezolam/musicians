@@ -298,6 +298,11 @@ class Pitch(OptsMixin):
         self.transpose_octave(-other)
         return self
 
+    # Other magic
+
+    def __call__(self):
+        return self.value
+
     # Printing
 
     def as_str(self):

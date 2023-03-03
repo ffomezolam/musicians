@@ -171,5 +171,50 @@ class TestPitch(unittest.TestCase):
             self.p.set(10)
             self.assertEqual(self.p.transpose_octave(-1, 10).value, 8)
 
+    def test_magic(self):
+        self.p.set(60)
+
+        with self.subTest('call should return value'):
+            self.assertEqual(self.p(), 60)
+
+        with self.subTest('print should show note name'):
+            self.assertEqual(self.p.__str__(), 'C4')
+
+        with self.subTest('+ should return increased pitch'):
+            p2 = self.p + 3
+            self.assertEqual(p2.value, 63)
+
+        with self.subTest('- should return decreased pitch'):
+            p2 = self.p - 3
+            self.assertEqual(p2.value, 57)
+
+        with self.subTest('* should return increased octave'):
+            p2 = self.p * 1
+            self.assertEqual(p2.value, 72)
+
+        with self.subTest('/ should return decreased octave'):
+            p2 = self.p / 1
+            self.assertEqual(p2.value, 48)
+
+        with self.subTest('+= should increase pitch'):
+            self.p.set(60)
+            self.p += 3
+            self.assertEqual(self.p(), 63)
+
+        with self.subTest('-= should decrease pitch'):
+            self.p.set(60)
+            self.p -= 3
+            self.assertEqual(self.p(), 57)
+
+        with self.subTest('*= should increase octave'):
+            self.p.set(60)
+            self.p *= 1
+            self.assertEqual(self.p(), 72)
+
+        with self.subTest('/= should decrease octave'):
+            self.p.set(60)
+            self.p /= 1
+            self.assertEqual(self.p(), 48)
+
 if __name__ == '__main__':
     unittest.main()
