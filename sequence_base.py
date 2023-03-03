@@ -28,6 +28,202 @@ def shift_seq(l: list, amt: int = 0):
 
     return l[amt:] + l[:amt]
 
+def stretch_seq(seq: list, size: int, style: int|str = "repeat", istyle: str = "loop", iround: str = "none"):
+    """
+    Function for stretching (or shrinking) a list.
+
+    Parameters
+    ----------
+    seq
+        The list to stretch
+    size
+        The size to stretch to
+    style
+        Stretch style. Valid values: int, "repeat", "interpolate"
+    istyle
+        Interpolate style. Valid values: "loop", "repeat"
+    iround
+        Rounding style. Valide values: "none", "auto", "up", "down"
+    """
+
+    if not size or not seq return []
+
+    if type(style) != int and style not in ("repeat", "interpolate"): style = "repeat"
+    if istyle not in ("loop", "repeat"): style = "loop"
+    if iround not in ("auto","none","up","down"): iround = "none"
+
+    steps = len(seq)
+
+    if size > steps:
+        # get divisible and remainder
+        num, extra = divmod(size, steps)
+        num -= 1 # adjust for existing steps
+
+        result = [[seq[i]] for i in range(steps)]
+
+        if size >= steps * 2:
+            # size more than twice step count so we can quickly insert model markers
+            for i in range(steps): result[i] += [-1 for _ in range(num)]
+
+        if extra:
+            # there is a remainder so distribute by euclidean model
+            model = generate_euclidean(len(result) + extra, len(result))
+
+            result = list(its.chain.from_iterable([result.pop(0) if hit else [-1] for hit in model]))
+        else:
+            result = list(its.chain.from_iterable(result))
+
+        # fill model
+        match style:
+            case int():
+                # replace with integer
+                result = [style if i < 0 else i for i in result]
+            case "repeat":
+                # repeat last value
+                for ix in range(len(result)):
+                    if result[ix] < 0:
+                        result[ix] = result[ix - 1]
+            case "interpolate":
+                q = []
+
+                # get bounding indices
+                for ix, val in enumerate(result):
+                    # add index to queue
+                    if val >= 0:
+                        q.append(ix)
+
+                    # handle 2 indices
+                    if len(q) >= 2:
+                        # get indices and reset q
+                        ix1, ix2, q = q[0], q[1], []
+
+                        # check for space between indices
+                        if ix2 - ix1 > 1:
+                            # have space so can interpolate
+                            n = ix2 - ix1 - 1 # num entries between indices
+
+                            # get interpolated values
+                            ivals = interpolate(result[ix1], result[ix2], n, iround)
+
+                            # sub values into sequence
+                            for vix, six in enumerate(range(ix1 + 1, ix2)):
+                                result[six] = ivals[vix]
+
+                        q.append(ix2) # restart from second index
+
+                # handle trailing elements if necessary
+                if result[-1] < 0:
+                    last_ix = q[0] # index of last hit
+                    val = result[last_ix] # last value
+
+                    # set trailing elements based on style
+                    match istyle:
+                        case "loop":
+                            # interpolate to first value
+                            n = len(result) - last_ix - 1 # number of entries
+
+                            # get interpolated values
+                            ivals = interpolate(val, result[0], n, interpolate_rounding)
+
+                            # replace with interpolated values
+                            for vix, six in enumerate(range(last_ix + 1, len(result))):
+                                result[six] = ivals[vix]
+
+                        case "repeat":
+                            # repeat last value
+                            for i in range(last_ix + 1, len(result)):
+                                result[i] = val
+
+        return result
+
+    elif size < steps:
+        # get model to distribute items
+        model = generate_euclidean(steps, size)
+
+        # ones in model are remaining items
+        result = [seq[i] for i in range(steps) if model[i]]
+
+        return result
+
+def shrink_seq(seq: list, size: int, style: int|str = "repeat", istyle: str = "loop", iround: str = "none"):
+    "Alias for stretch_seq()"
+    return stretch_seq(seq, size, style, istyle, iround)
+
+def expand_seq(seq: list, size: int, style: int|str = 0, looplen = 0, iround = "none"):
+    "Expand sequence by adding elements at end"
+    if type(style) != int and style not in ("repeat", "loop", "interpolate"): style = 0
+
+    steps = len(seq)
+
+    seq = seq.copy()
+
+    if size > steps:
+        match style:
+            case int():
+                # fill with int
+                n = style
+                for _ in range(size - steps):
+                    seq.append(n)
+
+            case "repeat":
+                # fill with last value
+                n = seq[-1]
+                for _ in range(size - steps):
+                    seq.append(n)
+
+            case "loop":
+                # adjust loop length for a 0 value
+                if not looplen: looplen = steps
+
+                # create loop
+                loop = seq[-looplen:]
+
+                # append loop to new end
+                for i in range(size - steps):
+                    seq.append(loop[i % len(loop)])
+
+            case "interpolate":
+                # get interpolated values
+                start = seq[-1]
+                end = seq[0]
+                n = size - steps
+
+                ivals = interpolate(start, end, n, rounding_style = iround)
+
+                # insert interpolated values into sequence
+                for ival in ivals:
+                    seq.append(ival)
+
+    elif size < steps:
+        # trim end of sequence
+        seq = seq[:size]
+
+    return seq
+
+def contract_seq(seq: list, size: int, style: int|str = 0, looplen = 0, iround = "none"):
+    "Alias for expand_seq()"
+    return expand_seq(seq, size, style, looplen, iround)
+
+def reverse_seq(seq: list):
+    "Reverse sequence"
+    return list(reversed(seq))
+
+def loop_seq(seq: list, n: int = 2):
+    "Copy sequence n times"
+
+    if not n return []
+
+    is_neg = n < 0
+    n = abs(n)
+    size = len(seq) * 2
+
+    seq = expand_seq(seq, size, 'loop')
+
+    if is_neg:
+        seq = reverse_seq(seq)
+
+    return seq
+
 # Generator functions
 
 def generate_euclidean(steps: int = DEFAULT_STEPS, hits: int = DEFAULT_HITS, shift: int = DEFAULT_SHIFT) -> list:
@@ -73,6 +269,8 @@ class SequenceBase(ABC):
         """ Copy sequence """
         pass
 
+    # Sequence manipulation
+
     @abstractmethod
     def insert(self, sequence, beat: int = 1):
         """ Insert a sequence into sequence """
@@ -96,8 +294,6 @@ class SequenceBase(ABC):
     def replace(self, sequence, beat: int = 1, style: Optional[str] = None):
         """Replace portion of sequence"""
         pass
-
-    # Sequence manipulation
 
     @abstractmethod
     def shift(self, amount: int = DEFAULT_SHIFT, style: Optional[str] = None):
@@ -215,15 +411,15 @@ class SequenceBase(ABC):
 
     def __getitem__(self, beat: int):
         """Get step by bracket notation"""
-        pass
+        return self.seq[beat - 1]
 
     def __setitem__(self, beat: int, value: int):
         """Set step by bracket notation"""
-        pass
+        self.seq[beat - 1] = value
 
     def __iter__(self):
         """Iterate over hits"""
-        pass
+        return (i for i in self.seq)
 
     # String representation
 

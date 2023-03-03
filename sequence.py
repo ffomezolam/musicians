@@ -9,7 +9,6 @@ from __future__ import annotations
 from typing import Optional
 
 import itertools as its
-import math
 
 # Instance option methods
 
@@ -65,6 +64,12 @@ class Sequence(SequenceBase, OptsMixin):
         # init base class for steps, hits, offset, and seq
         SequenceBase.__init__(self)
 
+        # from SequenceBase
+        # self.steps = 0
+        # self.hits = 0
+        # self.offset = 0
+        # self.seq = []
+
         self._cache = None
 
         # self._opts created by OptsMixin
@@ -111,6 +116,8 @@ class Sequence(SequenceBase, OptsMixin):
     def copy(self):
         """Create copy of sequence"""
         return Sequence(self.seq, options = self._opts)
+
+    # Sequence manipulation
 
     def insert(self, sequence, beat: int = 1):
         """
@@ -190,8 +197,6 @@ class Sequence(SequenceBase, OptsMixin):
 
         return self
 
-    # Sequence manipulation
-
     def shift(self, amount: int = DEFAULT_SHIFT, style: Optional[str] = None):
         """Shift sequence"""
 
@@ -226,103 +231,11 @@ class Sequence(SequenceBase, OptsMixin):
         if not size: return self
 
         style = self.getopts('stretch-with') if style is None or (type(style) == int and style < 0) else style
-        interpolate_style = interpolate_style or self.getopts('interpolate-style')
-        interpolate_rounding = interpolate_rounding or self.getopts('interpolate-rounding')
+        istyle = interpolate_style or self.getopts('interpolate-style')
+        iround = interpolate_rounding or self.getopts('interpolate-rounding')
 
-        if size > self.steps:
-            # get divisible and remainder
-            num, extra = divmod(size, self.steps)
-            num -= 1 # adjust for existing step entries
-
-            result = [[self.seq[i]] for i in range(self.steps)]
-
-            # only automate adding markers if size is more than twice step count
-            if size >= self.steps * 2:
-                for i in range(self.steps): result[i] += [-1 for _ in range(num)]
-
-            # convert result to a model with -1 as values to fill
-            if extra:
-                # we have a remainder, need to distribute by euclidean model
-                model = generate_euclidean(len(result) + extra, len(result))
-
-                # all zeros in model are the distributed items
-                result = list(its.chain.from_iterable([result.pop(0) if hit else [-1] for hit in model]))
-            else:
-                result = list(its.chain.from_iterable(result))
-
-            # Replace -1 entries
-            match style:
-                case int():
-                    # integer replacement
-                    result = [style if i < 0 else i for i in result]
-                case "repeat":
-                    # repeat last value
-                    for ix in range(len(result)):
-                        if result[ix] < 0:
-                            result[ix] = result[ix - 1]
-                case "interpolate":
-                    q = []
-
-                    # get bounding indices of interpolatable values
-                    for ix, val in enumerate(result):
-                        # add index to queue
-                        if val >= 0:
-                            q.append(ix)
-
-                        # handle 2 indices
-                        if len(q) >= 2:
-                            # get indices and reset q
-                            ix1, ix2, q = q[0], q[1], [] # get ixs and reset q
-
-                            # check for space beween indices
-                            if ix2 - ix1 > 1:
-                                # we have 2 indices with space between so can interpolate
-                                n = ix2 - ix1 - 1 # number of entries between indices
-
-                                # get interpolated values
-                                ivals = interpolate(result[ix1], result[ix2], n, interpolate_rounding)
-
-                                # sub values into sequence
-                                for vix, six in enumerate(range(ix1 + 1, ix2)):
-                                    result[six] = ivals[vix]
-
-                            q.append(ix2) # start again at second index
-
-                    # handle last elements (if necessary)
-                    if result[-1] < 0:
-                        last_ix = q[0] # index of last non-distributed element
-                        val = result[last_ix] # last value
-
-                        # set final distributed elements based on style
-                        match interpolate_style:
-                            case 'loop':
-                                # loop interpolation to first value
-                                n = len(result) - last_ix - 1 # number of entries
-
-                                # get interpolated values
-                                ivals = interpolate(val, result[0], n, interpolate_rounding)
-
-                                # replace with interpolated values
-                                for vix, six in enumerate(range(last_ix + 1, len(result))):
-                                    result[six] = ivals[vix]
-
-                            case 'repeat':
-                                # repeat last value
-                                for i in range(last_ix + 1, len(result)):
-                                    result[i] = val
-
-            # cache and replace sequence
-            self._cache_for(result)
-
-        elif size < self.steps:
-            # get model to distribute items
-            model = generate_euclidean(self.steps, size)
-
-            # ones in model are remaining items
-            result = [self.seq[i] for i in range(self.steps) if model[i]]
-
-            # cache and replace sequence
-            self._cache_for(result)
+        result = stretch_seq(self.seq, size, style, istyle, iround)
+        self._cache_for(result)
 
         return self
 
@@ -333,6 +246,7 @@ class Sequence(SequenceBase, OptsMixin):
         mult_rounding: Optional[str] = None
     ):
         """Stretch sequence by multiplier, creating/removing intermediate values"""
+
         roundmethod = mult_rounding or self.getopts('global-rounding')
         size = rounder(self.steps * mult, roundmethod)
 
@@ -381,50 +295,7 @@ class Sequence(SequenceBase, OptsMixin):
 
         interpolate_rounding = interpolate_rounding or self.getopts('interpolate-rounding')
 
-        # copy sequence for adjustments
-        seq = self.seq.copy()
-
-        # expand by style
-        if size > self.steps:
-            match style:
-                case int():
-                    # fill with int
-                    n = style
-                    for _ in range(size - self.steps):
-                        seq.append(n)
-
-                case "repeat":
-                    # fill with last value
-                    n = seq[-1]
-                    for _ in range(size - self.steps):
-                        seq.append(n)
-
-                case "loop":
-                    # adjust loop length for 0 value
-                    if not loop_length: loop_length = self.steps
-
-                    # create loop
-                    loop = seq[-loop_length:]
-
-                    # append loop to new end
-                    for i in range(size - self.steps):
-                        seq.append(loop[i % len(loop)])
-
-                case "interpolate":
-                    # get interpolated values
-                    start = seq[-1]
-                    end = seq[0]
-                    n = size - self.steps
-
-                    ivals = interpolate(start, end, n, rounding_style = interpolate_rounding)
-
-                    # insert interpolated values into sequence
-                    for ival in ivals:
-                        seq.append(ival)
-
-        elif size < self.steps:
-            # trim end of sequence
-            seq = self.seq[:size]
+        seq = expand_seq(self.seq)
 
         # cache and replace
         self._cache_for(seq)
@@ -458,7 +329,7 @@ class Sequence(SequenceBase, OptsMixin):
     def reverse(self):
         """Reverse sequence"""
 
-        seq = list(reversed(self.seq))
+        seq = reverse_seq(self.seq)
 
         self._cache_for(seq)
 
@@ -467,14 +338,8 @@ class Sequence(SequenceBase, OptsMixin):
     def loop(self, n: int = 2):
         """Copy sequence n times"""
 
-        if n != 0:
-            is_neg = n < 0
-            n = abs(n)
-
-            self.expand_by(n, 'loop')
-
-            if is_neg:
-                self.reverse()
+        seq = loop_seq(seq, n)
+        self._cache_for(seq)
 
         return self
 
@@ -516,6 +381,39 @@ class Sequence(SequenceBase, OptsMixin):
 
         return self
 
+    ## Manipulation magic methods
+
+    def __add__(self, other: Sequence|list):
+        """
+        Return new sequence consisting of second sequence appended to first.
+        Options will be carried over from first sequence.
+        """
+        s1 = self.seq
+        s2 = other if type(other) == list else other.seq
+
+        return Sequence(s1 + s2, options = self._opts)
+
+    def __mul__(self, n: int):
+        """
+        Return new sequence consisting of sequence looped n times.
+        Options are carried over.
+        """
+        return Sequence(list(its.chain.from_iterable(its.repeat(self.seq, n))), options = self._opts)
+
+    def __truediv__(self, n):
+        """
+        Returns new sequence shrunk by n
+        """
+        s = self.copy()
+        return Sequence(s.shrink_by(n).seq, options = self._opts)
+
+    def __floordiv__(self, n):
+        """
+        Returns new sequence contracted by n
+        """
+        s = self.copy()
+        return Sequence(s.contract_by(n).seq, options = self._opts)
+
     # Sequence querying
 
     def as_list(self):
@@ -541,6 +439,12 @@ class Sequence(SequenceBase, OptsMixin):
         """Iterate over hits"""
 
         return (i for i in self.seq)
+
+    def __eq__(self, other: Sequence|list):
+        "Test if sequences are the same"
+        s1 = self.seq
+        s2 = other if type(other) == list else other.seq
+        return s1 == s2
 
     # String representation
 
