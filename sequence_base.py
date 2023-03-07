@@ -7,6 +7,7 @@ from __future__ import annotations
 from typing import Optional
 
 from abc import ABC, abstractmethod # abstract base class support
+from collections.abc import MutableSequence
 
 import itertools as its
 
@@ -16,7 +17,7 @@ from sequence_defaults import DEFAULT_STEPS, DEFAULT_HITS, DEFAULT_SHIFT
 
 # Helpers
 
-from helpers import mod
+from helpers import mod, rounder, interpolate
 
 # Sequence manipulation functions
 
@@ -28,7 +29,12 @@ def shift_seq(l: list, amt: int = 0):
 
     return l[amt:] + l[:amt]
 
-def stretch_seq(seq: list, size: int, style: int|str = "repeat", istyle: str = "loop", iround: str = "none"):
+def stretch_seq(seq: list,
+                size: int,
+                style: Optional[int|str] = "repeat",
+                istyle: Optional[str] = "loop",
+                iround: Optional[str] = "none"
+):
     """
     Function for stretching (or shrinking) a list.
 
@@ -46,10 +52,10 @@ def stretch_seq(seq: list, size: int, style: int|str = "repeat", istyle: str = "
         Rounding style. Valide values: "none", "auto", "up", "down"
     """
 
-    if not size or not seq return []
+    if not size or not seq: return []
 
     if type(style) != int and style not in ("repeat", "interpolate"): style = "repeat"
-    if istyle not in ("loop", "repeat"): style = "loop"
+    if istyle not in ("loop", "repeat"): istyle = "loop"
     if iround not in ("auto","none","up","down"): iround = "none"
 
     steps = len(seq)
@@ -78,11 +84,13 @@ def stretch_seq(seq: list, size: int, style: int|str = "repeat", istyle: str = "
             case int():
                 # replace with integer
                 result = [style if i < 0 else i for i in result]
+
             case "repeat":
                 # repeat last value
                 for ix in range(len(result)):
                     if result[ix] < 0:
                         result[ix] = result[ix - 1]
+
             case "interpolate":
                 q = []
 
@@ -103,7 +111,7 @@ def stretch_seq(seq: list, size: int, style: int|str = "repeat", istyle: str = "
                             n = ix2 - ix1 - 1 # num entries between indices
 
                             # get interpolated values
-                            ivals = interpolate(result[ix1], result[ix2], n, iround)
+                            ivals = interpolate(result[ix1], result[ix2], n, rounding_style=iround)
 
                             # sub values into sequence
                             for vix, six in enumerate(range(ix1 + 1, ix2)):
@@ -123,7 +131,7 @@ def stretch_seq(seq: list, size: int, style: int|str = "repeat", istyle: str = "
                             n = len(result) - last_ix - 1 # number of entries
 
                             # get interpolated values
-                            ivals = interpolate(val, result[0], n, interpolate_rounding)
+                            ivals = interpolate(val, result[0], n, rounding_style=iround)
 
                             # replace with interpolated values
                             for vix, six in enumerate(range(last_ix + 1, len(result))):
@@ -211,11 +219,11 @@ def reverse_seq(seq: list):
 def loop_seq(seq: list, n: int = 2):
     "Copy sequence n times"
 
-    if not n return []
+    if not n: return []
 
     is_neg = n < 0
     n = abs(n)
-    size = len(seq) * 2
+    size = rounder(len(seq) * n)
 
     seq = expand_seq(seq, size, 'loop')
 
@@ -245,9 +253,9 @@ def generate_euclidean(steps: int = DEFAULT_STEPS, hits: int = DEFAULT_HITS, shi
 
     return coll
 
-# Abstract Class code
+# Base Class code
 
-class SequenceBase(ABC):
+class SequenceBase(ABC, MutableSequence):
     """
     Abstract base class representing a skeleton sequence.
     """
@@ -261,7 +269,10 @@ class SequenceBase(ABC):
     # Sequence creation
 
     @abstractmethod
-    def set(self, sequence: Optional[list|int|Sequence] = None):
+    def set(self, sequence: Optional[list|int|SequenceBase] = None):
+        """
+        Set sequence, including getting number of steps and hits, and zeroing offset
+        """
         pass
 
     @abstractmethod
@@ -272,7 +283,7 @@ class SequenceBase(ABC):
     # Sequence manipulation
 
     @abstractmethod
-    def insert(self, sequence, beat: int = 1):
+    def insert(self, sequence, step: int = 1):
         """ Insert a sequence into sequence """
         pass
 
@@ -291,7 +302,7 @@ class SequenceBase(ABC):
         pass
 
     @abstractmethod
-    def replace(self, sequence, beat: int = 1, style: Optional[str] = None):
+    def replace(self, sequence, step: int = 1, style: Optional[str] = None):
         """Replace portion of sequence"""
         pass
 
@@ -372,59 +383,97 @@ class SequenceBase(ABC):
         """Copy sequence n times"""
         pass
 
-    @abstractmethod
-    def reset(self):
-        """Reset to original sequence (i.e. undo all)"""
-        pass
-
-    @abstractmethod
-    def _cache_for(self, new_seq: list):
-        """Cache sequence and replace with new_seq"""
-        pass
-
     ## Step/value manipulation
 
     @abstractmethod
-    def replace_value(self, value, rvalue, limit: int = 0):
+    def replace_value(self, value: int, rvalue: int, limit: int = 0):
         """Replace specified value in sequence with another value"""
         pass
 
     @abstractmethod
-    def replace_step(self, step, value):
+    def replace_step(self, step: int, value: int = 0):
         """Replace value at step with specified value"""
         pass
 
+    ## Manipulation magic methods
+
+    def __add__(self, other: Sequence|list):
+        """
+        Return new sequence consisting of second sequence appended to first.
+        """
+        seq = self.copy()
+
+        match other:
+            case list():
+                seq.set(self.seq + other)
+            case Sequence():
+                seq.set(self.seq + other.seq)
+
+        return seq
+
+    def __mul__(self, n: int):
+        """
+        Return new sequence consisting of sequence looped n times.
+        """
+        return self.copy().loop(n)
+
+    def __truediv__(self, n):
+        """
+        Returns new sequence shrunk by n
+        """
+        return self.copy().shrink_by(n)
+
+    def __floordiv__(self, n):
+        """
+        Returns new sequence contracted by n
+        """
+        return self.copy().contract_by(n)
+
     # Sequence querying
 
-    @abstractmethod
     def as_list(self):
         """Get sequence as list"""
-        pass
+        return self.seq
 
     def __call__(self):
-        """ Alias for as_list() """
+        """
+        Alias for as_list()
+        """
         return self.as_list()
 
     def __len__(self):
         """Sequence length"""
         return self.steps
 
-    def __getitem__(self, beat: int):
+    def __getitem__(self, step: int):
         """Get step by bracket notation"""
-        return self.seq[beat - 1]
+        return self.seq[step - 1]
 
-    def __setitem__(self, beat: int, value: int):
+    def __setitem__(self, step: int, value: int):
         """Set step by bracket notation"""
-        self.seq[beat - 1] = value
+        self.replace_step(step, value)
+
+    @abstractmethod
+    def __delitem__(self, step: int):
+        """
+        Delete an item
+        """
+        pass
 
     def __iter__(self):
         """Iterate over hits"""
         return (i for i in self.seq)
 
+    def __eq__(self, other: SequenceBase|list):
+        "Test if sequences are the same"
+        s1 = self.seq
+        s2 = other if type(other) == list else other.seq
+        return s1 == s2
+
     # String representation
 
     def __repr__(self):
-        return f'Sequence({self.seq})'
+        return f'{self.__class__}({self.seq})'
 
     def __str__(self):
         return f'{self.steps}:{self.hits} {self.seq}'
