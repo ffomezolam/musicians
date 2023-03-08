@@ -370,8 +370,8 @@ class TestSequence(unittest.TestCase):
         self.seq.set([1,2,3,4])
         self.seq.expand_to(7)
         with self.subTest("Manipulators should cache original sequence"):
-            self.assertListEqual(self.seq._cache, [1,2,3,4])
             self.assertListEqual(self.seq.seq, [1,2,3,4,0,0,0])
+            self.assertEqual(self.seq._undomgr.size(), 1)
 
         self.seq.reset()
 
@@ -379,7 +379,28 @@ class TestSequence(unittest.TestCase):
             self.assertListEqual(self.seq.seq, [1,2,3,4])
 
         with self.subTest("Reset should erase cache"):
-            self.assertIsNone(self.seq._cache)
+            self.assertEqual(self.seq._undomgr.size("undo"), 0)
+
+    def test_replace_step(self):
+        self.seq.set([1,2,3,4])
+        self.seq.replace_step(2, 4)
+        self.assertSequenceEqual(self.seq.seq, [1,4,3,4])
+
+    def test_remove_step(self):
+        with self.subTest("should set to int if style is int"):
+            self.seq.set([1,2,3,4])
+            self.seq.remove_step(1, 0)
+            self.assertSequenceEqual(self.seq.seq, [0,2,3,4])
+
+        with self.subTest("should cut step if style is cut"):
+            self.seq.set([1,2,3,4])
+            self.seq.remove_step(1, "cut")
+            self.assertSequenceEqual(self.seq.seq, [2,3,4])
+
+    def test_replace_value(self):
+        self.seq.set([1,2,3,4,3,2,1])
+        self.seq.replace_value(2, 5)
+        self.assertSequenceEqual(self.seq.seq, [1,5,3,4,3,5,1])
 
 if __name__ == '__main__':
     unittest.main()

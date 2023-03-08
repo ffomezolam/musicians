@@ -5,14 +5,12 @@ All things Sequencing
 # TODO: Need to ensure that a sequence can hold arbitrary structures (e.g. a
 # Note instance) and perform all operations adequately
 
+# TODO: Need to handle offset for stretch/shrink operations
+
 from __future__ import annotations
 from typing import Optional
 
 import itertools as its
-
-# Instance option methods
-
-from opts import OptsMixin
 
 # Global defaults
 
@@ -34,9 +32,14 @@ from sequence_base import shift_seq, stretch_seq, expand_seq, reverse_seq, loop_
 
 from sequence_base import generate_euclidean
 
+# Class support
+
+from opts import OptsMixin # options support
+from historian import HistorianMixin
+
 # Class code
 
-class Sequence(SequenceBase, OptsMixin):
+class Sequence(SequenceBase, OptsMixin, HistorianMixin):
     """
     Class representing a single musical sequence. For purposes of this class,
     all indices are represented as beats, and therefore counting starts at 1.
@@ -74,8 +77,11 @@ class Sequence(SequenceBase, OptsMixin):
 
         # self._opts created by OptsMixin
         OptsMixin.__init__(self, DEFAULT_SEQUENCE_OPTS)
-
         self.setopts(options)
+
+        # init undo manager
+        HistorianMixin.__init__(self)
+
         self.set(sequence)
 
     # Option handling
@@ -103,7 +109,6 @@ class Sequence(SequenceBase, OptsMixin):
             self.seq = sequence
             self.steps = len(self.seq)
             self.hits = sum([1 if item > 0 else 0 for item in self.seq])
-            self.offset = 0
 
         return self
 
@@ -117,16 +122,24 @@ class Sequence(SequenceBase, OptsMixin):
 
     # Sequence manipulation
 
-    def insert(self, sequence: Sequence|list, beat: int = 1):
+    def insert(self, sequence: Sequence|list, step: int = 1):
         """
-        Insert sequence at beat, shifting current sequence.
-        Beat 0 is start.
+        Insert sequence at step, shifting current sequence.
+        Step 1 is start.
         """
+
         if isinstance(sequence, Sequence): sequence = sequence.seq
 
-        idx = beat - 1
+        # allow for negative steps
+        if step < 0: step = self.steps + step + 1
+
+        # convert steps to index
+        idx = step - 1
 
         self.set(self.seq[:idx] + sequence + self.seq[idx:])
+
+        # register with Historian
+        self._undomgr.register(self.remove, step, len(sequence))
 
         return self
 
@@ -153,9 +166,16 @@ class Sequence(SequenceBase, OptsMixin):
         # convert beats to index
         start -= 1
 
+        # get ending index
         end = start + length
 
+        # get the sequence that's between start and end for the undo manager
+        removed = self.seq[start:end]
+
         self.set(self.seq[:start] + self.seq[end:])
+
+        # register with Historian
+        self._undomgr.register(self.insert, removed, start + 1)
 
         return self
 
@@ -165,38 +185,60 @@ class Sequence(SequenceBase, OptsMixin):
 
         self.set(self.seq + sequence)
 
+        # register with Historian
+        self._undomgr.register(self.remove, -len(sequence))
+
         return self
 
     def prepend(self, sequence):
         """Prepend sequence to start"""
+
+        # register with Historian
+        self._undomgr.register(self.remove, len(sequence))
+
         return self.insert(sequence)
 
-    def replace(self, sequence, beat: int = 1, style: Optional[str] = None):
+    def replace(self, sequence, step: int = 1, style: Optional[str] = None):
         """Replace portion of sequence"""
 
         style = style or self.getopts('replace-style')
 
-        if len(sequence) > self.steps: self.set(sequence)
+        # register original with undo manager
+        self._undomgr.register(self.set, self.seq[:])
+
+        # new sequence replaces from start and exceeds old seq length
+        if len(sequence) > self.steps and step == 1:
+            # replace current with new sequence
+            return self.set(sequence)
 
         # convert beat to index
-        start = beat - 1
+        start = step - 1
         end = start + len(sequence)
 
         if end < self.steps:
             # can replace within current bounds
+
+            # replace portion
             self.set(self.seq[:start] + sequence + self.seq[end:])
+
         else:
             # replacement length exceeds current bounds
             if style == 'trim':
+                # trim new sequence to fit current length
                 newlen = self.steps - start
                 self.set(self.seq[:start] + sequence[:newlen])
+
             else: # style == 'expand'
+                # expand sequence to fit new sequence
                 self.set(self.seq[:start] + sequence)
 
         return self
 
     def shift(self, amount: int = DEFAULT_SHIFT, style: Optional[str] = None):
         """Shift sequence"""
+
+        # register original with undo manager
+        self._undomgr.register(self.shift, -amount, "relative")
 
         style = style or self.getopts('shift-style')
 
@@ -205,7 +247,7 @@ class Sequence(SequenceBase, OptsMixin):
             amount -= self.offset
             self.seq = shift_seq(self.seq, amount)
             self.offset = amount
-        else:
+        else: # relative
             self.seq = shift_seq(self.seq, amount)
             self.offset += amount
 
@@ -233,7 +275,13 @@ class Sequence(SequenceBase, OptsMixin):
         iround = interpolate_rounding or self.getopts('interpolate-rounding')
 
         result = stretch_seq(self.seq, size, style, istyle, iround)
-        self._cache_for(result)
+
+        # register original with Historian
+        self._undomgr.register(self.set, self.seq[:])
+
+        # adjust offset and save result
+        self.offset = rounder(self.offset * (size / self.steps))
+        self.set(result)
 
         return self
 
@@ -295,8 +343,11 @@ class Sequence(SequenceBase, OptsMixin):
 
         seq = expand_seq(self.seq, size, style, loop_length, interpolate_rounding)
 
-        # cache and replace
-        self._cache_for(seq)
+        # register original with undo manager
+        self._undomgr.register(self.set, self.seq[:])
+
+        # save result (no offset adjust)
+        self.set(seq)
 
         return self
 
@@ -329,7 +380,11 @@ class Sequence(SequenceBase, OptsMixin):
 
         seq = reverse_seq(self.seq)
 
-        self._cache_for(seq)
+        # register original with Historian
+        self._undomgr.register(self.reverse)
+
+        # save result
+        self.set(seq)
 
         return self
 
@@ -337,26 +392,25 @@ class Sequence(SequenceBase, OptsMixin):
         """Copy sequence n times"""
 
         seq = loop_seq(self.seq, n)
-        self._cache_for(seq)
+
+        # register original with Historian
+        self._undomgr.register(self.set, self.seq[:])
+
+        # save result
+        self.set(seq)
 
         return self
 
-    # Caching
+    # Undo history
+
+    ### defined by HistorianMixin
+    # undo()
+    # redo()
 
     def reset(self):
         """Reset to original sequence (i.e. undo all)"""
 
-        if self._cache:
-            self.set(self._cache)
-            self._cache = None
-
-        return self
-
-    def _cache_for(self, new_seq: list):
-        """Cache sequence and replace with new_seq"""
-
-        if not self._cache: self._cache = self.seq
-        self.set(new_seq)
+        self.undo(0)
 
         return self
 
@@ -364,26 +418,48 @@ class Sequence(SequenceBase, OptsMixin):
 
     def replace_value(self, value, rvalue, limit: int = 0):
         """Replace specified value in sequence with another value"""
-        # TODO: This is resetting the whole sequence - what if we want to
-        # preserve shift amount, offset, expansion, etc so we can undo those?
-        # Probably need to replace value in both seq and cache
-        # TODO: implement limit
 
-        self.set([rvalue if step == value else step for step in self.seq])
+        # register with Historian
+        self._undomgr.register(self.set, self.seq[:])
+
+        # save result
+        count = 0
+        for ix in range(self.steps):
+            v = self.seq[ix]
+            if v == value:
+                self.seq[ix] = rvalue
+                count += 1
+
+            if limit != 0 and count == limit: break
 
         return self
 
     def replace_step(self, step, value):
         """Replace value at step with specified value"""
-        # TODO: Same as above - might need to replace something in cache
-        # as well
 
-        self[step] = value
+        # register with Historian
+        self._undomgr.register(self.replace_step, step, self.seq[step - 1])
+
+        # set step to value
+        self.seq[step - 1] = value
 
         return self
 
-    ### defined by SequenceBase
-    # remove_step()
+    def remove_step(self, step: int = 1, style: Optional[int|str] = None):
+        "Remove item at step"
+
+        # register with Historian
+        self._undomgr.register(self.set, self.seq[:])
+
+        if style is None: style = self.getopts("delete-style")
+
+        match style:
+            case int():
+                self.seq[step - 1] = 0 if style < 0 else style
+            case "cut":
+                SequenceBase.remove_step(self, step)
+
+        return self
 
     ## Manipulation magic methods
 
@@ -397,20 +473,13 @@ class Sequence(SequenceBase, OptsMixin):
     def __delitem__(self, step: int):
         """ Delete item at step according to delete-style option """
 
-        style = self.getopts("delete-style")
-
-        match style:
-            case int():
-                self.seq[step] = 0 if style < 0 else style
-            case "cut":
-                self.remove_step(step)
-
-        return self
+        self.remove_step(step)
 
     # Sequence querying
 
     ### defined by SequenceBase class:
     # as_list()
+    # get_step()
     # __call__()
     # __len__()
     # __getitem__()

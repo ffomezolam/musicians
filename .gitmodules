@@ -1,0 +1,3 @@
+[submodule "historian"]
+	path = historian
+	url = git@github.com:ffomezolam/historian-py.git

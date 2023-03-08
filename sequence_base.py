@@ -397,6 +397,7 @@ class SequenceBase(ABC, MutableSequence):
 
     def remove_step(self, step: int):
         "Remove step from sequence"
+        step -= 1
         v = self.seq[step]
         del self.seq[step]
         self.steps -= 1
@@ -454,6 +455,10 @@ class SequenceBase(ABC, MutableSequence):
         """Get sequence as list"""
         return self.seq
 
+    def get_step(self, step: int):
+        "Get value at step"
+        return self.seq[step - 1]
+
     def __call__(self):
         """
         Alias for as_list()
@@ -466,7 +471,7 @@ class SequenceBase(ABC, MutableSequence):
 
     def __getitem__(self, step: int):
         """Get step by bracket notation"""
-        return self.seq[step - 1]
+        return self.get_step(step)
 
     def __iter__(self):
         """Iterate over hits"""
