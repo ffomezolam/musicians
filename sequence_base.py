@@ -395,6 +395,15 @@ class SequenceBase(ABC, MutableSequence):
         """Replace value at step with specified value"""
         pass
 
+    def remove_step(self, step: int):
+        "Remove step from sequence"
+        v = self.seq[step]
+        del self.seq[step]
+        self.steps -= 1
+        if v: self.hits -= 1
+
+        return self
+
     ## Manipulation magic methods
 
     def __add__(self, other: Sequence|list):
@@ -429,6 +438,16 @@ class SequenceBase(ABC, MutableSequence):
         """
         return self.copy().contract_by(n)
 
+    def __setitem__(self, step: int, value: int):
+        """Set step by bracket notation"""
+        self.replace_step(step, value)
+
+    def __delitem__(self, step: int):
+        """
+        Delete an item
+        """
+        return self.remove_step(step)
+
     # Sequence querying
 
     def as_list(self):
@@ -448,17 +467,6 @@ class SequenceBase(ABC, MutableSequence):
     def __getitem__(self, step: int):
         """Get step by bracket notation"""
         return self.seq[step - 1]
-
-    def __setitem__(self, step: int, value: int):
-        """Set step by bracket notation"""
-        self.replace_step(step, value)
-
-    @abstractmethod
-    def __delitem__(self, step: int):
-        """
-        Delete an item
-        """
-        pass
 
     def __iter__(self):
         """Iterate over hits"""

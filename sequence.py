@@ -28,7 +28,7 @@ from sequence_base import SequenceBase
 
 # Sequence manipulation functions
 
-from sequence_base import shift_seq
+from sequence_base import shift_seq, stretch_seq, expand_seq, reverse_seq, loop_seq
 
 # Generator functions
 
@@ -86,15 +86,9 @@ class Sequence(SequenceBase, OptsMixin):
 
     # Sequence creation
 
-    def set(self, sequence: Optional[list|int|Sequence] = None):
+    def set(self, sequence: Optional[list|int|SequenceBase] = None):
         """
         Set sequence, including getting number of steps and hits, and zeroing offset
-
-        sequence: [list|int|Sequence]
-            If not specified, set a blank sequence with default settings.
-            If int, set a blank sequence with specified number of steps.
-            If a Sequence instance, copy the sequence.
-            If a list, set sequence to list.
         """
         if not sequence:
             # set to a blank sequence
@@ -102,7 +96,7 @@ class Sequence(SequenceBase, OptsMixin):
         elif type(sequence) == int:
             # set to a blank sequence with specified steps
             return self.set([0 for _ in range(sequence)])
-        elif isinstance(sequence, Sequence):
+        elif isinstance(sequence, SequenceBase):
             # copy sequence contents
             return self.set(sequence.seq)
         else:
@@ -114,12 +108,16 @@ class Sequence(SequenceBase, OptsMixin):
         return self
 
     def copy(self):
-        """Create copy of sequence"""
+        """
+        Create copy of sequence.
+
+        Overrides SequenceBase.copy() to allow for passing sequence options.
+        """
         return Sequence(self.seq, options = self._opts)
 
     # Sequence manipulation
 
-    def insert(self, sequence, beat: int = 1):
+    def insert(self, sequence: Sequence|list, beat: int = 1):
         """
         Insert sequence at beat, shifting current sequence.
         Beat 0 is start.
@@ -295,7 +293,7 @@ class Sequence(SequenceBase, OptsMixin):
 
         interpolate_rounding = interpolate_rounding or self.getopts('interpolate-rounding')
 
-        seq = expand_seq(self.seq)
+        seq = expand_seq(self.seq, size, style, loop_length, interpolate_rounding)
 
         # cache and replace
         self._cache_for(seq)
@@ -338,10 +336,12 @@ class Sequence(SequenceBase, OptsMixin):
     def loop(self, n: int = 2):
         """Copy sequence n times"""
 
-        seq = loop_seq(seq, n)
+        seq = loop_seq(self.seq, n)
         self._cache_for(seq)
 
         return self
+
+    # Caching
 
     def reset(self):
         """Reset to original sequence (i.e. undo all)"""
@@ -367,6 +367,7 @@ class Sequence(SequenceBase, OptsMixin):
         # TODO: This is resetting the whole sequence - what if we want to
         # preserve shift amount, offset, expansion, etc so we can undo those?
         # Probably need to replace value in both seq and cache
+        # TODO: implement limit
 
         self.set([rvalue if step == value else step for step in self.seq])
 
@@ -381,75 +382,43 @@ class Sequence(SequenceBase, OptsMixin):
 
         return self
 
+    ### defined by SequenceBase
+    # remove_step()
+
     ## Manipulation magic methods
 
-    def __add__(self, other: Sequence|list):
-        """
-        Return new sequence consisting of second sequence appended to first.
-        Options will be carried over from first sequence.
-        """
-        s1 = self.seq
-        s2 = other if type(other) == list else other.seq
+    ### defined by SequenceBase
+    # __add__()
+    # __mul__()
+    # __truediv__()
+    # __floordiv__()
+    # __setitem__()
 
-        return Sequence(s1 + s2, options = self._opts)
+    def __delitem__(self, step: int):
+        """ Delete item at step according to delete-style option """
 
-    def __mul__(self, n: int):
-        """
-        Return new sequence consisting of sequence looped n times.
-        Options are carried over.
-        """
-        return Sequence(list(its.chain.from_iterable(its.repeat(self.seq, n))), options = self._opts)
+        style = self.getopts("delete-style")
 
-    def __truediv__(self, n):
-        """
-        Returns new sequence shrunk by n
-        """
-        s = self.copy()
-        return Sequence(s.shrink_by(n).seq, options = self._opts)
+        match style:
+            case int():
+                self.seq[step] = 0 if style < 0 else style
+            case "cut":
+                self.remove_step(step)
 
-    def __floordiv__(self, n):
-        """
-        Returns new sequence contracted by n
-        """
-        s = self.copy()
-        return Sequence(s.contract_by(n).seq, options = self._opts)
+        return self
 
     # Sequence querying
 
-    def as_list(self):
-        """Get sequence as list"""
-        return self.seq
-
-    def __call__(self):
-        return self.as_list()
-
-    def __len__(self):
-        """Sequence length"""
-        return self.steps
-
-    def __getitem__(self, beat: int):
-        """Get step by bracket notation"""
-        return self.seq[beat - 1]
-
-    def __setitem__(self, beat: int, value: int):
-        """Set step by bracket notation"""
-        self.seq[beat - 1] = value
-
-    def __iter__(self):
-        """Iterate over hits"""
-
-        return (i for i in self.seq)
-
-    def __eq__(self, other: Sequence|list):
-        "Test if sequences are the same"
-        s1 = self.seq
-        s2 = other if type(other) == list else other.seq
-        return s1 == s2
+    ### defined by SequenceBase class:
+    # as_list()
+    # __call__()
+    # __len__()
+    # __getitem__()
+    # __iter__()
+    # __eq__()
 
     # String representation
 
-    def __repr__(self):
-        return f'Sequence({self.seq})'
-
-    def __str__(self):
-        return f'{self.steps}:{self.hits} {self.seq}'
+    ### defined by SequenceBase:
+    # __repr__()
+    # __str__()

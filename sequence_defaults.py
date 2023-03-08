@@ -39,6 +39,9 @@ DEFAULT_SEQUENCE_OPTS = {
 
     # length of loop when looping
     "loop-length": 0, # 0 for entire loop, int for last n items
+
+    # how to handle deletion of items
+    "delete-style": "cut", # int for replace, "cut" to remove
 }
 
 # default sequencegroup options
