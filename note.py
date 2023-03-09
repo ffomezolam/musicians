@@ -26,38 +26,60 @@ class Note():
 
     def __init__(self,
                  pitch: Optional[int|str|Pitch|Note] = None,
-                 velocity: Optional[int] = None,
-                 duration: Optional[int|str|Duration] = None
+                 duration: Optional[int|str|Duration] = None,
+                 velocity: Optional[int] = None
     ):
         self.pitch = None
-        self.velocity = None
         self.duration = None
+        self.velocity = None
 
-        self.set(pitch, velocity, duration)
+        self.set(pitch, duration, velocity)
 
     def set(self,
             pitch: Optional[int|str|Pitch|Note] = None,
-            velocity: Optional[int] = None,
-            duration: Optional[int|str|Duration] = None
+            duration: Optional[int|str|Duration] = None,
+            velocity: Optional[int] = None
     ):
+        "Set Note attributes"
+
         match pitch:
             case int() | str() | Pitch():
-                pass
+                self.pitch = Pitch(pitch)
+            case Note():
+                self.pitch = pitch.pitch.copy()
+                self.velocity = pitch.velocity
+                self.duration = pitch.duration.copy()
             case _:
                 self.pitch = DEFAULT_PITCH
 
-        match velocity:
-            case _:
-                self.velocity = DEFAULT_VELOCITY
-
         match duration:
+            case int()
             case _:
                 self.duration = DEFAULT_DURATION
 
+        match velocity:
+            case int():
+                self.velocity = velocity
+            case _:
+                self.velocity = DEFAULT_VELOCITY
+
+        return self
+
+    def copy(self):
+        "Make a copy of Note"
+
+        return Note(self)
+
     # String representation
 
+    def as_str(self):
+        "Pretty printing"
+        return f'{self.pitch}, {self.duration}, v{self.velocity}'
+
     def __repr__(self):
-        pass
+        return f'{self.__class__}({self.pitch, self.duration, self.velocity})'
 
     def __str__(self):
-        pass
+        return self.as_str()
+
+class Rest(Note)

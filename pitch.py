@@ -193,7 +193,7 @@ class Pitch(OptsMixin):
     """
 
     def __init__(self,
-                 note: Optional[str|int] = None,
+                 note: Optional[str|int|Pitch] = None,
                  octave: Optional[int] = None,
                  *,
                  options: Optional[dict] = None
@@ -209,7 +209,7 @@ class Pitch(OptsMixin):
         self.set(note, octave)
 
     def set(self,
-            note: Optional[str|int] = None,
+            note: Optional[str|int|Pitch] = None,
             octave: Optional[int] = None
     ):
         """
@@ -224,6 +224,8 @@ class Pitch(OptsMixin):
         if type(note) == int:
             note = midirange(note)
             self.value = note
+        elif type(note) == Pitch:
+            self.value = note.value
         else:
             n, a, o = parse_pitch(note)
 
@@ -232,6 +234,11 @@ class Pitch(OptsMixin):
             self.value = pitch_to_value(n + a + str(o))
 
         return self
+
+    def copy(self):
+        "Make a copy"
+
+        return Pitch(self.value, options = self._opts)
 
     def transpose_semi(self, semi: int, wrap: int = 0):
         "Transpose pitch by semitones"
@@ -301,6 +308,7 @@ class Pitch(OptsMixin):
     # Other magic
 
     def __call__(self):
+        "Returns pitch value"
         return self.value
 
     # Printing
@@ -310,7 +318,7 @@ class Pitch(OptsMixin):
         return format_accidental(value_to_pitch(self.value), 'symbol')
 
     def __repr__(self):
-        return f'Pitch({self.value})'
+        return f'{self.__class__}({self.value})'
 
     def __str__(self):
         return f'{self.as_str()}'
