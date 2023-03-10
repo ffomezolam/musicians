@@ -53,7 +53,8 @@ class Note():
                 self.pitch = DEFAULT_PITCH
 
         match duration:
-            case int()
+            case int():
+                self.duration = duration
             case _:
                 self.duration = DEFAULT_DURATION
 
@@ -82,4 +83,8 @@ class Note():
     def __str__(self):
         return self.as_str()
 
-class Rest(Note)
+class Rest(Note):
+    "Represents a rest (a note with velocity 0)"
+
+    def __init__(self, duration: Optional[int|str|Duration] = None):
+        Note.__init__(self, 0, duration, 0)

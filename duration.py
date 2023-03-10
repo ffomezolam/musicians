@@ -21,10 +21,6 @@ import itertools as its
 
 RE_DURATION = re.compile(r'(64|32|16|8|4|2|1)(d?t?|n?)')
 
-DURATIONS = {1, 2, 4, 8, 16, 32, 64}
-
-MODIFIERS = {'d', 't'}
-
 MOD_DURATIONS = {
     '1n': Fraction(1, 1),
     '2d': Fraction(1, 2) + Fraction(1, 4),
@@ -55,41 +51,34 @@ MOD_DURATIONS = {
 DUR_STRINGS = [k for k in MOD_DURATIONS if type(k) == str]
 DUR_FRACTIONS = [k for k in MOD_DURATIONS if type(k) == Fraction]
 
-DEFAULT_DURATION = 4
+DEFAULT_DURATION = '4n'
 
 # Helper functions
 
-def parse_dur_str(dstr: str|int):
-    "Parse duration string"
+def validate_dur(dstr: str|int):
+    "Validate duration string"
 
-    if type(dstr) == int: dstr = str(int)
-
-    m = RE_DURATION.match(dstr)
+    m = RE_DURATION.match(str(dstr))
 
     if not m: raise ValueError(f'Invalid duration: {dstr}')
 
-    return int(m[1]), m[2]
+    dur, mods = m[1], m[2] or 'n'
 
-def parse_mods(mods: str|tuple|list|set):
-    "Verify and format modifiers"
-    match mods:
-        case str():
-            mods = [c for c in mods]
-        case tuple() | list() | set():
-            mods = list(mods)
-        case _:
-            mods = []
+    return dur + mods
 
-    mods = [mod for mod in mods if mod in MODIFIERS]
+def split_dur(dstr: str|int):
+    "Split duration string into (dur, mods)"
 
-    return set(mods)
+    dstr = validate_dur(dstr)
+    m = RE_DURATION.match(dstr)
+
+    return m[1], m[2]
 
 def dur_to_frac(d):
     "Convert duration string to fraction"
 
-    ds = parse_dur_str(d)
-    mods = parse_mods(ds[1])
-    d = Fraction(1, ds[0])
+    dur, mods = split_dur(d)
+    d = Fraction(1, int(dur))
     if 'd' in mods: d += (d / 2)
 
     return d
@@ -148,7 +137,7 @@ def div_dur(d, v):
 
     d = dur_to_frac(d)
 
-    r = d / m
+    r = d / v
 
     return frac_to_dur(r)
 
@@ -157,62 +146,38 @@ def div_dur(d, v):
 class Duration:
     "Represents a quantized musical note duration"
 
-    def __init__(self,
-                 dur: Optional[int|str|Duration] = None,
-                 mods: Optional[str|tuple|list|set] = None
-    ):
+    def __init__(self, dur: Optional[int|str|Duration|Fraction] = None):
         self.duration = None
-        self.modifiers = None
 
-        self.set(dur, mods)
+        self.set(dur)
 
     # Object creation
 
-    def set(self,
-            dur: Optional[int|str|Duration] = None,
-            mods: Optional[str|tuple|list|set] = None
-    ):
+    def set(self, dur: Optional[int|str|Duration|Fraction] = None):
         "Set duration attributes"
 
-        match dur:
-            case int():
-                if dur in DURATIONS:
-                    self.duration = dur
-                    self.modifiers = parse_mods(mods)
+        if type(dur) == Fraction: dur = frac_to_dur(dur)
 
-            case str():
-                duration, modifiers = parse_dur_str(dur)
-
-                self.duration = duration
-                self.modifiers = parse_mods(modifiers or mods)
-
-            case Duration():
-                self.duration = dur.duration
-                self.modifiers = dur.modifiers
-
-            case _:
-                self.duration = DEFAULT_DURATION
-                self.modifiers = set()
+        self.duration = validate_dur(str(dur)) if dur else DEFAULT_DURATION
 
         return self
 
     # Math
 
-    def __eq__(self, other: int|str|Duration):
+    def __eq__(self, dur: int|str|Duration|Fraction):
         "Equality"
-        match other:
-            case int():
-                return self.duration == other
-            case str():
-                dur, mods = parse_dur_str(other)
-                mods = parse_mods(mods)
-                return self.duration == dur and self.modifiers == mods
+
+        match dur:
+            case int() | str():
+                return self.duration == validate_dur(dur)
             case Duration():
-                return self.duration == other.duration and self.modifiers == other.modifiers
+                return self.duration == dur.duration
+            case Fraction():
+                return self.duration == frac_to_dur(dur)
 
         return False
 
-    def __add__(self, other: int|str|Duration):
+    def __add__(self, other: int|str|Duration|Fraction):
         "Addition"
 
         v1 = self.as_str()
@@ -221,7 +186,16 @@ class Duration:
 
         return tuple([Duration(d) for d in r]) if type(r) == tuple else Duration(r)
 
-    def __sub__(self, other: int|str|Duration):
+    def __iadd__(self, other: int|str|Duration|Fraction):
+        "In-place addition"
+
+        other = Duration(other)
+
+        self.set(self + other)
+
+        return self
+
+    def __sub__(self, other: int|str|Duration|Fraction):
         "Subtraction"
 
         v1 = self.as_str()
@@ -229,6 +203,15 @@ class Duration:
         r = sub_durs(v1, other)
 
         return tuple([Duration(d) for d in r]) if type(r) == tuple else Duration(r)
+
+    def __isub__(self, other: int|str|Duration|Fraction):
+        "In-place subtraction"
+
+        other = Duration(other)
+
+        self.set(self - other)
+
+        return self
 
     def __mul__(self, multiplier: int|float):
         "Multiplication"
@@ -238,6 +221,13 @@ class Duration:
 
         return tuple([Duration(d) for d in r]) if type(r) == tuple else Duration(r)
 
+    def __imul__(self, multiplier: int|float):
+        "In-place multiplication"
+
+        self.set(mul_dur(self.duration, multiplier))
+
+        return self
+
     def __truediv__(self, divisor: int|float):
         "Division"
 
@@ -246,20 +236,50 @@ class Duration:
 
         return tuple([Duration(d) for d in r]) if type(r) == tuple else Duration(r)
 
+    def __idiv__(self, divisor: int|float):
+        "In-place division"
+
+        self.set(div_dur(self.duration, divisor))
+
+        return self
+
+    def __round__(self):
+        "Rounding strips modifiers"
+
+        return self.__floor__()
+
+    def __floor__(self):
+        "Floor operation strips modifiers"
+
+        return Duration(split_dur(self.duration)[0])
+
+    def __ceil__(self):
+        "Ceil operation rounds to longer note"
+
+        dur, mods = split_dur(self.duration)
+
+        if mods == 'n': return self.copy()
+
+        if 'd' in mods: return Duration(mul_dur(dur, 2))
+
+        return self.copy()
+
+    # Conversion
+
+    def to_fraction(self):
+        "Return duration as a Fraction instance"
+
+        return dur_to_frac(self.duration)
+
     # String representation
 
     def as_str(self):
         "Pretty string representation"
 
-        # enforce 'd' before 't'
-        modifiers = self.modifiers
-        if modifiers == set('dt'): modifiers = 'dt'
-        elif not modifiers: modifiers = 'n'
-
-        return f'{self.duration}{"".join(modifiers)}'
+        return self.duration
 
     def __repr__(self):
-        return f'{self.__class__}({self.duration, self.modifiers})'
+        return f'{self.__class__}({self.duration})'
 
     def __str__(self):
         return self.as_str()
