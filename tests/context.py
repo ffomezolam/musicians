@@ -14,3 +14,4 @@ import sequence
 import sequence_group
 import note
 import pitch
+import duration
