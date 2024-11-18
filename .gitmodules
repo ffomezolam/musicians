@@ -1,3 +1,6 @@
 [submodule "historian"]
 	path = historian
 	url = git@github.com:ffomezolam/historian-py.git
+[submodule "opts"]
+	path = opts
+	url = git@github.com:ffomezolam/opts-py.git
